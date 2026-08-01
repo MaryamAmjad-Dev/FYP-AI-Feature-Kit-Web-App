@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 AI Feature Kit Web App
+# AI Feature Kit Web App
 
 ### AI-Powered Multimedia Platform
 
