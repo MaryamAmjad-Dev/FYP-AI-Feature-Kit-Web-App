@@ -166,31 +166,16 @@ VITE_HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
 
 ## Home Page
 
-> Add screenshot here
+# 📸 Screenshots
 
----
+| Home Page | Features |
+|-----------|----------|
+| ![](screenshots/home.png) | ![](screenshots/features.png) |
 
-## Text-to-Image
+| Login | Sign Up |
+|-------|---------|
+| ![](screenshots/login.png) | ![](screenshots/signup.png) |
 
-> Add screenshot here
-
----
-
-## Background Remover
-
-> Add screenshot here
-
----
-
-## Text-to-Speech
-
-> Add screenshot here
-
----
-
-## Voice Changer
-
-> Add screenshot here
 
 ---
 
