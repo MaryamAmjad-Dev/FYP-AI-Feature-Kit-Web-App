@@ -162,9 +162,6 @@ VITE_HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
 
 ---
 
-# 📸 Screenshots
-
-## Home Page
 
 # 📸 Screenshots
 
