@@ -4,7 +4,7 @@
 
 ### AI-Powered Multimedia Platform
 
-Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**, **Background Removal**, **Voice Changer**, and **Text Summarization** — all in one modern web application.
+Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**, **Background Removal**, **Voice Changer**, and **Text Summarization:** all in one modern web application.
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![Express.js](https://img.shields.io/badge/Express.js-000000?logo=express&logoColor=white)
@@ -15,9 +15,6 @@ Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**,
 
 </div>
 
----
-
-## 📖 Overview
 
 ---
 
