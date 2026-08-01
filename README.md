@@ -188,16 +188,22 @@ VITE_HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
 
 # 🚀 Future Improvements
 
-- AI Chatbot
-- AI Image Editing
-- AI Video Generator
-- Multi-language Support
-- Dark/Light Theme
-- Cloud Storage
-- Download History
-- Image Upscaling
-- OCR
-- Speech Translation
+- 🤖 AI Chatbot
+- 🧠 AI Agents (Task Automation & Multi-Agent Workflows)
+- 🎨 AI Image Editing
+- 🎥 AI Video Generator
+- 🌍 Multi-language Support
+- 🌗 Dark/Light Theme
+- ☁️ Cloud Storage Integration
+- 📜 Download & Generation History
+- 🖼️ AI Image Upscaling
+- 🔍 OCR (Optical Character Recognition)
+- 🌐 Speech Translation
+- 🎙️ Real-Time Voice Cloning
+- 💬 Conversational Voice Assistant
+- 📄 AI Document Summarization
+- 📊 AI Analytics Dashboard
+- 📱 Progressive Web App (PWA) Support
 
 ---
 
