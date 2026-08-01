@@ -1,19 +1,23 @@
+<div align="center">
+
 # 🚀 AI Feature Kit Web App
 
-<p align="center">
-  <b>An AI-powered web application that brings multiple AI tools together in one platform.</b>
-</p>
+### AI-Powered Multimedia Platform
 
-<p align="center">
+Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**, **Background Removal**, **Voice Changer**, and **Text Summarization** — all in one modern web application.
 
-![React](https://img.shields.io/badge/React-19-blue?logo=react)
-![Express](https://img.shields.io/badge/Express.js-Backend-black?logo=express)
-![Node.js](https://img.shields.io/badge/Node.js-JavaScript-green?logo=node.js)
-![MySQL](https://img.shields.io/badge/MySQL-Database-blue?logo=mysql)
-![Vite](https://img.shields.io/badge/Vite-Frontend-purple?logo=vite)
-![License](https://img.shields.io/badge/License-Educational-orange)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![Express.js](https://img.shields.io/badge/Express.js-000000?logo=express&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-AI-FFD21E?logo=huggingface&logoColor=black)
 
-</p>
+</div>
+
+---
+
+## 📖 Overview
 
 ---
 
