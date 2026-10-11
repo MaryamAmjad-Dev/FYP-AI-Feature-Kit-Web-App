@@ -26,7 +26,9 @@ const config = {
   nodeEnv,
   isProduction: nodeEnv === 'production',
 
-  // Origins allowed to call the API from a browser
+  // Origins allowed to call the API from a browser. Supports a wildcard in
+  // the host, e.g. https://*.maryamamjad-projects.vercel.app (every deploy
+  // gets its own URL, so an exact alias alone is not enough).
   corsOrigins: toList(process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173'),
 
   // Set to e.g. "loopback", "1" or "true" when running behind a reverse
@@ -83,4 +85,18 @@ const config = {
 
 config.smtp.enabled = Boolean(config.smtp.host);
 
-module.exports = { config };
+// Exact match, or wildcard match where "*" stands for any part of the host.
+// "https://*.example.com" matches "https://a.example.com" (but not
+// "https://example.com" itself and not "http://a.example.com").
+function originMatches(pattern, origin) {
+  if (pattern === origin) return true;
+  if (!pattern.includes('*')) return false;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`).test(origin);
+}
+
+function isOriginAllowed(origin) {
+  return config.corsOrigins.some((pattern) => originMatches(pattern, origin));
+}
+
+module.exports = { config, originMatches, isOriginAllowed };

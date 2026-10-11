@@ -1,4 +1,4 @@
-const { config } = require('./config');
+const { config, isOriginAllowed } = require('./config');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -31,7 +31,7 @@ app.use(
 // CORS: only the origins configured in .env (empty origin = non-browser client)
 app.use(
   cors({
-    origin: (origin, callback) => callback(null, !origin || config.corsOrigins.includes(origin)),
+    origin: (origin, callback) => callback(null, !origin || isOriginAllowed(origin)),
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
