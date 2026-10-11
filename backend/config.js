@@ -12,6 +12,15 @@ const toList = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+// TRUST_PROXY env var -> the value Express understands:
+// "true" -> true, "1" -> 1 (hop count), "loopback"/"10.0.0.0/8" -> kept as is.
+function parseTrustProxy(value) {
+  if (!value || value === 'false') return null;
+  if (value === 'true') return true;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+}
+
 const config = {
   port: Number(process.env.PORT) || 5000,
   nodeEnv,
@@ -22,10 +31,12 @@ const config = {
 
   // Set to e.g. "loopback", "1" or "true" when running behind a reverse
   // proxy so that rate limiting sees the real client IP.
-  trustProxy: process.env.TRUST_PROXY || '',
+  // (Vercel needs TRUST_PROXY=1)
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
 
   db: {
     // Full connection string, e.g. postgresql://user:pass@localhost:5432/webai
+    // On Vercel/Neon use the *pooled* endpoint (the one with "-pooler" in it).
     connectionString: process.env.DATABASE_URL || '',
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT) || 5432,
@@ -33,6 +44,12 @@ const config = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'webai',
     ssl: process.env.PG_SSL === 'true',
+    // Serverless platforms keep many short-lived instances: a small pool
+    // (1-3) avoids exhausting the database connection limit.
+    poolMax: Number(process.env.DB_POOL_MAX) || 10,
+    // Set to true on Vercel once the tables exist in Neon (schema.sql),
+    // so every cold start skips the CREATE TABLE statements.
+    skipSchemaInit: process.env.SKIP_SCHEMA_INIT === 'true',
   },
 
   jwt: {

@@ -7,8 +7,13 @@ import { clearSession, getToken } from './auth';
  * - Attaches the auth token to every request.
  * - Clears the session when the server says the token is no longer valid.
  */
+// Accept either "https://host" or "https://host/api" — the API always lives
+// under /api, so make sure the base URL points there.
+const rawBase = import.meta.env.VITE_API_URL || '/api';
+const baseURL = rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/+$/, '')}/api`;
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL,
   timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });

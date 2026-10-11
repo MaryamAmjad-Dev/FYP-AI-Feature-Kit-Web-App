@@ -14,7 +14,7 @@ const pool = new Pool({
         password: config.db.password,
         database: config.db.database,
       }),
-  max: 10,
+  max: config.db.poolMax,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   // Set PG_SSL=true for managed databases (Neon, Supabase, RDS, ...)
@@ -63,6 +63,10 @@ const SCHEMA = `
 `;
 
 async function initSchema() {
+  // On Vercel the tables are usually created once in the Neon SQL editor;
+  // SKIP_SCHEMA_INIT=true then keeps cold starts fast.
+  if (config.db.skipSchemaInit) return;
+
   // node-pg allows several statements in one call as long as there are no
   // parameters; we still run them one by one so a failure points at one table.
   for (const statement of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) {

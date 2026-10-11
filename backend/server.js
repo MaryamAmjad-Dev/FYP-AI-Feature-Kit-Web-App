@@ -15,8 +15,9 @@ app.disable('x-powered-by');
 
 // Behind a reverse proxy the client IP must come from X-Forwarded-For,
 // otherwise every request would share one rate-limit bucket.
-if (config.trustProxy && config.trustProxy !== 'false') {
-  app.set('trust proxy', config.trustProxy === 'true' ? true : config.trustProxy);
+// On Vercel set TRUST_PROXY=1 (one proxy hop).
+if (config.trustProxy !== null) {
+  app.set('trust proxy', config.trustProxy);
 }
 
 // Security headers (helmet)
@@ -93,7 +94,11 @@ async function start() {
   });
 }
 
-start();
+// On Vercel the platform imports this file and calls the exported app for
+// every request; only listen when it is started directly (node server.js).
+if (require.main === module) {
+  start();
+}
 
 async function shutdown() {
   try {
@@ -105,3 +110,6 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// Exported for Vercel's Node.js runtime (api/index.js) and for tests.
+module.exports = app;

@@ -222,6 +222,63 @@ VITE_API_URL=/api
 
 ---
 
+# 🚀 Deployment (Vercel + Neon)
+
+The app runs as **two Vercel projects** (API + static frontend) that both come
+from this repository, with a **Neon** PostgreSQL database.
+
+## 1. Create the database (Neon)
+
+1. Sign up at <https://neon.tech> and create a project (pick the region closest
+   to your users).
+2. Copy the **pooled** connection string — the host name contains `-pooler`:
+   ```
+   postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+   ```
+3. In the Neon **SQL editor**, run the contents of `backend/schema.sql` once
+   (or let the API create the tables on its first request — then skip
+   `SKIP_SCHEMA_INIT` below).
+
+## 2. Backend — Vercel project #1
+
+1. <https://vercel.com> → **Add New → Project** → import this repository.
+2. **Settings → General → Root Directory**: `backend`.
+3. Deploy (Vercel finds the serverless function in `backend/api/index.js`).
+4. **Settings → Environment Variables** — add, then **redeploy**:
+
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | Neon **pooled** connection string |
+   | `JWT_SECRET` | long random string (`openssl rand -hex 48`) |
+   | `NODE_ENV` | `production` |
+   | `TRUST_PROXY` | `1` |
+   | `DB_POOL_MAX` | `1` |
+   | `SKIP_SCHEMA_INIT` | `true` (only if you ran schema.sql in step 1.3) |
+   | `CORS_ORIGINS` | frontend URL from step 3 (e.g. `https://app.vercel.app`) |
+   | `APP_URL` | frontend URL (used in password-reset emails) |
+   | `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` / `HUGGINGFACE_API_KEY` | optional AI features |
+   | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | password-reset emails (without SMTP the code is only printed in the function logs — fine for a demo, not for real users) |
+
+5. The API is live at `https://<backend-project>.vercel.app/api/health`.
+
+## 3. Frontend — Vercel project #2
+
+1. Import the **same repository** again as a new project.
+2. **Settings → General → Root Directory**: `frontend` (Vite is auto-detected).
+3. **Environment Variables**: `VITE_API_URL` =
+   `https://<backend-project>.vercel.app/api`
+4. Deploy. Custom domain optional (Settings → Domains).
+
+## ⚠️ Platform notes
+
+- **Payload limit**: Vercel functions accept ~4.5 MB per request/response, so
+  very large images through *Remove Background* may fail on the free tier.
+- **Rate limiting** uses an in-memory store per function instance — perfect
+  for a demo/viva, not a substitute for a shared store at scale.
+- **Cold starts**: the first request after idle takes ~1–2 s (serverless).
+
+---
+
 # 🧪 Tests
 
 ```bash
