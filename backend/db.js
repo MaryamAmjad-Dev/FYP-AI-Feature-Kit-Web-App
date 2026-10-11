@@ -16,7 +16,9 @@ const pool = new Pool({
       }),
   max: config.db.poolMax,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  // Fail fast instead of hanging past the serverless time limit; the pool
+  // simply opens a new connection on the next query.
+  connectionTimeoutMillis: 5000,
   // Set PG_SSL=true for managed databases (Neon, Supabase, RDS, ...)
   ssl: config.db.ssl ? { rejectUnauthorized: false } : undefined,
 });

@@ -10,6 +10,10 @@ const { initSchema } = require('../db');
 let ready = null;
 
 module.exports = (req, res) => {
+  // CORS preflights never touch the database — answering them immediately
+  // keeps cold starts from timing out the browser's OPTIONS request.
+  if (req.method === 'OPTIONS') return app(req, res);
+
   if (!ready) {
     ready = initSchema().catch((error) => {
       console.error('Schema init failed:', error.message);

@@ -32,6 +32,17 @@ const AUTH_ENDPOINTS = ['/login', '/signup', '/forgot-password', '/reset-passwor
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (!error.response) {
+      // The request never reached the server (offline, DNS, VPN/proxy or a
+      // blocked domain) — give the UI a message users can act on.
+      error.response = {
+        data: {
+          message:
+            'Could not reach the server. Check your internet connection (or VPN/proxy) and try again.',
+        },
+      };
+    }
+
     const status = error.response?.status;
     const url = error.config?.url || '';
     const isAuthAttempt = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
