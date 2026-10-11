@@ -24,9 +24,12 @@ const {
 const router = express.Router();
 
 // Brute-force protection for credential endpoints.
+// Brute-force protection for login/signup/password-reset.
+// The counter is in-memory per serverless instance, so keep the limit
+// forgiving (a classroom/viva network shares one public IP).
 const credentialLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 15,
+  limit: 60,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: (req, res, next, options) =>

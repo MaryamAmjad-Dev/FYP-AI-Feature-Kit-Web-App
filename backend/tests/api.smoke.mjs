@@ -247,7 +247,7 @@ try {
 
   await check('credential endpoints are rate limited', async () => {
     let limited = false;
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 70; i++) {
       const r = await request('/api/login', {
         method: 'POST',
         body: { email: 'x@y.com', password: 'p' },
@@ -257,7 +257,7 @@ try {
         break;
       }
     }
-    assert(limited, 'never returned 429 after 25 login attempts');
+    assert(limited, 'never returned 429 after 70 login attempts');
   });
 } catch (error) {
   results.push(['server startup', 'FAIL', error.message]);
