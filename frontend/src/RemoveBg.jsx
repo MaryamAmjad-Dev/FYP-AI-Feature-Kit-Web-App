@@ -2,23 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaImage, FaSpinner, FaDownload, FaUpload } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
-import { removeBgApiKey } from './api'; // ✅ import your key
-import axios from 'axios';
-
-const logFeatureUsage = async (userId, feature) => {
-  try {
-    await axios.post("http://localhost:5000/api/feature-usage", {
-      userId,
-      feature,
-    });
-  } catch (err) {
-    console.error("Failed to log feature usage", err);
-  }
-  };
+import { extractErrorMessage, fileToBase64, logFeatureUsage, removeBackground } from './api';
+import { isLoggedIn } from './auth';
 
 export default function RemoveBg() {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
 
   const [file, setFile] = useState(null);
   const [outputUrl, setOutputUrl] = useState('');
@@ -29,27 +18,42 @@ export default function RemoveBg() {
   const [isDragging, setIsDragging] = useState(false);
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
   const imageRef = useRef(null);
+  const objectUrlsRef = useRef({ preview: '', output: '' });
 
   useEffect(() => {
-    const loginStatus = localStorage.getItem('loggedIn') === 'true';
-    setIsLoggedIn(loginStatus);
-    if (!loginStatus) {
+    const loggedIn = isLoggedIn();
+    setIsLoggedInState(loggedIn);
+    if (!loggedIn) {
       navigate('/login');
-      return;
     }
   }, [navigate]);
+
+  // Memory: release every blob URL this component created.
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      if (urls.preview) URL.revokeObjectURL(urls.preview);
+      if (urls.output) URL.revokeObjectURL(urls.output);
+    };
+  }, []);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       setFile(selectedFile);
       setOutputUrl('');
+      if (objectUrlsRef.current.output) {
+        URL.revokeObjectURL(objectUrlsRef.current.output);
+        objectUrlsRef.current.output = '';
+      }
+      if (objectUrlsRef.current.preview) URL.revokeObjectURL(objectUrlsRef.current.preview);
       const preview = URL.createObjectURL(selectedFile);
+      objectUrlsRef.current.preview = preview;
       setPreviewUrl(preview);
       setIsSelecting(true);
+      setSelection({ x: 0, y: 0, width: 0, height: 0 });
     }
   };
-  
 
   const handleMouseDown = (e) => {
     if (!isSelecting) return;
@@ -76,39 +80,57 @@ export default function RemoveBg() {
 
   const handleMouseUp = () => setIsDragging(false);
 
+  /**
+   * The selection is tracked in CSS pixels of the *displayed* image, but
+   * remove.bg expects coordinates in the original image's pixels. Scale and
+   * clamp accordingly, otherwise the crop hits the wrong region on scaled or
+   * lazy-loaded images.
+   */
+  const getSelectionInImagePixels = () => {
+    const img = imageRef.current;
+    if (!img || selection.width <= 0 || selection.height <= 0) return null;
+
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    const naturalWidth = img.naturalWidth || rect.width;
+    const naturalHeight = img.naturalHeight || rect.height;
+    const scaleX = naturalWidth / rect.width;
+    const scaleY = naturalHeight / rect.height;
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const x = clamp(Math.round(selection.x * scaleX), 0, naturalWidth - 1);
+    const y = clamp(Math.round(selection.y * scaleY), 0, naturalHeight - 1);
+    const width = clamp(Math.round(selection.width * scaleX), 1, naturalWidth - x);
+    const height = clamp(Math.round(selection.height * scaleY), 1, naturalHeight - y);
+
+    if (width <= 0 || height <= 0) return null;
+    return { x, y, width, height };
+  };
+
   const handleUpload = async () => {
     if (!file) return alert('Please select an image first.');
     setLoading(true);
+
+    if (objectUrlsRef.current.output) {
+      URL.revokeObjectURL(objectUrlsRef.current.output);
+      objectUrlsRef.current.output = '';
+    }
     setOutputUrl('');
 
-    const formData = new FormData();
-    formData.append('image_file', file);
-    if (selection.width > 0 && selection.height > 0) {
-      formData.append('x', selection.x);
-      formData.append('y', selection.y);
-      formData.append('width', selection.width);
-      formData.append('height', selection.height);
-    }
-
     try {
-      const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-        method: 'POST',
-        headers: {
-          'X-Api-Key': removeBgApiKey,
-        },
-        body: formData,
-      });
+      const imageBase64 = await fileToBase64(file);
+      const crop = getSelectionInImagePixels();
+      const blob = await removeBackground({ imageBase64, crop });
 
-      if (!response.ok) throw new Error('Failed to remove background');
-      const blob = await response.blob();
-      setOutputUrl(URL.createObjectURL(blob));
-      
-      // Log feature usage after successful background removal
-      const userData = JSON.parse(localStorage.getItem("userData"));
-      const userId = userData?.id;
-      if (userId) await logFeatureUsage(userId, "remove-bg");
+      const url = URL.createObjectURL(blob);
+      objectUrlsRef.current.output = url;
+      setOutputUrl(url);
+
+      if (isLoggedInState) await logFeatureUsage('remove-bg');
     } catch (err) {
-      alert('Background removal failed. Please try again.');
+      const message = await extractErrorMessage(err);
+      alert(message || 'Background removal failed. Please try again.');
     }
 
     setLoading(false);

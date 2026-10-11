@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
+import apiClient from './apiClient';
 
 const Contact = () => {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
@@ -16,22 +17,16 @@ const Contact = () => {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+      const res = await apiClient.post('/contact', formData);
+      if (res.data.success) {
         toast.success('Message sent successfully!');
         setFormData({ name: '', email: '', message: '' });
       } else {
-        toast.error(data.message || 'Failed to send message');
+        toast.error(res.data.message || 'Failed to send message');
       }
     } catch (error) {
       console.error(error);
-      toast.error('Something went wrong. Try again!');
+      toast.error(error.response?.data?.message || 'Something went wrong. Try again!');
     }
     setLoading(false);
   };

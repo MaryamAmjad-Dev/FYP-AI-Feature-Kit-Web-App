@@ -7,9 +7,9 @@ import {
   FaMapMarkerAlt,
   FaLinkedin,
   FaGithub,
-  FaCog,
   FaLock,
 } from 'react-icons/fa';
+import { getUser, updateUser } from './auth';
 
 const Profile = () => {
   const [userData, setUserData] = useState({ name: '', email: '', role: '', phone: '', location: '', bio: '', skills: [], linkedin: '', github: '' });
@@ -22,16 +22,15 @@ const Profile = () => {
   const [skills, setSkills] = useState('');
 
   useEffect(() => {
-    const stored = localStorage.getItem('userData');
+    const stored = getUser();
     if (stored) {
-      const parsed = JSON.parse(stored);
-      setUserData((prev) => ({ ...prev, ...parsed }));
-      setName(parsed.name || '');
-      setRole(parsed.role || '');
-      setPhone(parsed.phone || '');
-      setLocation(parsed.location || '');
-      setBio(parsed.bio || '');
-      setSkills((parsed.skills && parsed.skills.join) ? parsed.skills.join(', ') : '');
+      setUserData((prev) => ({ ...prev, ...stored }));
+      setName(stored.name || '');
+      setRole(stored.role || '');
+      setPhone(stored.phone || '');
+      setLocation(stored.location || '');
+      setBio(stored.bio || '');
+      setSkills((stored.skills && stored.skills.join) ? stored.skills.join(', ') : '');
     }
   }, []);
 
@@ -40,17 +39,7 @@ const Profile = () => {
     const updatedSkills = skills.split(',').map(s => s.trim()).filter(Boolean);
     const updatedUser = { ...userData, name, role, phone, location, bio, skills: updatedSkills };
     setUserData(updatedUser);
-    const stored = localStorage.getItem('userData');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      parsed.name = name;
-      parsed.role = role;
-      parsed.phone = phone;
-      parsed.location = location;
-      parsed.bio = bio;
-      parsed.skills = updatedSkills;
-      localStorage.setItem('userData', JSON.stringify(parsed));
-    }
+    updateUser({ name, role, phone, location, bio, skills: updatedSkills });
     setEditing(false);
   };
 

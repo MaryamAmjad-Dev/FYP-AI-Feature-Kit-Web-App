@@ -1,26 +1,25 @@
-/* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaUser, FaSignOutAlt, FaCog, FaBars, FaTimes } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { clearSession, isLoggedIn } from './auth';
 
 const Navbar = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    setIsLoggedIn(localStorage.getItem('loggedIn') === 'true');
+    setIsLoggedInState(isLoggedIn());
   }, [location]);
 
   const handleLogout = () => {
-    localStorage.removeItem('loggedIn');
-    localStorage.removeItem('userData');
-    localStorage.removeItem('rememberMe');
-    setIsLoggedIn(false);
+    clearSession();
+    setIsLoggedInState(false);
     setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
     navigate('/login');
   };
 
@@ -60,7 +59,7 @@ const Navbar = () => {
 
           {/* Right Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            {!isLoggedIn ? (
+            {!isLoggedInState ? (
               <>
                 <Link
                   to="/login"
@@ -158,7 +157,7 @@ const Navbar = () => {
                 </Link>
               ))}
 
-              {!isLoggedIn ? (
+              {!isLoggedInState ? (
                 <>
                   <Link
                     to="/login"
@@ -184,14 +183,6 @@ const Navbar = () => {
                   >
                     <FaUser className="w-4 h-4 mr-2" />
                     Profile
-                  </Link>
-                  <Link
-                    to="/settings"
-                    className="flex items-center px-4 py-2 rounded-lg text-white hover:bg-pink-500/30 transition"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <FaCog className="w-4 h-4 mr-2" />
-                    Settings
                   </Link>
                   <button
                     onClick={() => {

@@ -4,13 +4,12 @@ import { FaMicrophone, FaPlay, FaStop, FaUpload, FaDownload } from 'react-icons/
 import { useNavigate } from 'react-router-dom';
 import * as Tone from 'tone';
 import audioBufferToWav from 'audiobuffer-to-wav';
-import axios from 'axios';
-
-
+import { logFeatureUsage } from './api';
+import { isLoggedIn } from './auth';
 
 const VoiceChanger = () => {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
 
   const [audioFile, setAudioFile] = useState(null);
   const [effect, setEffect] = useState('normal');
@@ -22,15 +21,31 @@ const VoiceChanger = () => {
   const [showPlayer, setShowPlayer] = useState(false);
   const intervalRef = useRef(null);
   const [processedAudioUrl, setProcessedAudioUrl] = useState(null);
+  const objectUrlsRef = useRef({ source: '', processed: '' });
 
   useEffect(() => {
-    const loginStatus = localStorage.getItem('loggedIn') === 'true';
-    setIsLoggedIn(loginStatus);
-    if (!loginStatus) {
+    const loggedIn = isLoggedIn();
+    setIsLoggedInState(loggedIn);
+    if (!loggedIn) {
       navigate('/login');
-      return;
     }
   }, [navigate]);
+
+  const releaseObjectUrl = (key) => {
+    if (objectUrlsRef.current[key]) {
+      URL.revokeObjectURL(objectUrlsRef.current[key]);
+      objectUrlsRef.current[key] = '';
+    }
+  };
+
+  // Memory: release blob URLs created for the player/export (unmount only).
+  useEffect(() => {
+    return () => {
+      releaseObjectUrl('source');
+      releaseObjectUrl('processed');
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (player) player.dispose();
@@ -53,25 +68,18 @@ const VoiceChanger = () => {
     if (player) player.dispose();
     setPlayer(null);
     setProcessedAudioUrl(null);
-  };
-
-  const logFeatureUsage = async (userId, feature) => {
-    try {
-      await axios.post("http://localhost:5000/api/feature-usage", {
-        userId,
-        feature,
-      });
-    } catch (err) {
-      console.error("Failed to log feature usage", err);
-    }
+    releaseObjectUrl('processed');
+    releaseObjectUrl('source');
   };
 
   const handleApplyEffect = async () => {
     if (!audioFile) return;
     try {
       await Tone.start();
-      const url = URL.createObjectURL(audioFile);
       if (player) player.dispose();
+      releaseObjectUrl('source');
+      const url = URL.createObjectURL(audioFile);
+      objectUrlsRef.current.source = url;
 
       let newPlayer = new Tone.Player(url, () => {
         setDuration(newPlayer.buffer.duration);
@@ -102,9 +110,7 @@ const VoiceChanger = () => {
       setShowPlayer(true);
       setCurrentTime(0);
       // Log feature usage
-      const userData = JSON.parse(localStorage.getItem("userData"));
-      const userId = userData?.id;
-      if (userId) await logFeatureUsage(userId, "voice-changer");
+      if (isLoggedInState) await logFeatureUsage('voice-changer');
     } catch (error) {
       console.error('Error applying effect:', error);
       alert('Error applying effect. Please try again.');
@@ -228,6 +234,8 @@ const VoiceChanger = () => {
       const wav = audioBufferToWav(renderedBuffer);
       const wavBlob = new Blob([wav], { type: 'audio/wav' });
       const url = URL.createObjectURL(wavBlob);
+      releaseObjectUrl('processed');
+      objectUrlsRef.current.processed = url;
       setProcessedAudioUrl(url);
     } catch (error) {
       console.error('Error exporting audio:', error);

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { FaGoogle, FaGithub, FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import apiClient from "./apiClient";
+import { setSession } from "./auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -18,14 +19,13 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post("http://localhost:5000/api/login", {
+      const res = await apiClient.post("/login", {
         email,
         password,
       });
 
-      if (res.data.success) {
-        localStorage.setItem("userData", JSON.stringify(res.data.user));
-        localStorage.setItem("loggedIn", "true");
+      if (res.data.success && res.data.token) {
+        setSession(res.data.token, res.data.user);
         if (rememberMe) {
           localStorage.setItem("rememberMe", "true");
         }

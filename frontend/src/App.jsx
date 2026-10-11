@@ -28,7 +28,7 @@ const AppContent = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       <Navbar />
       <div className="pt-16">
-        <Routes key={location.pathname} location={location}>
+        <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/features" element={<Features />} />
           <Route path="/home" element={<Home />} />
@@ -41,6 +41,7 @@ const AppContent = () => {
           <Route path="/terms" element={<Terms />} />
           <Route path="/terms-of-service" element={<TermsOfService />} /> {/* ✅ NEW ROUTE */}
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ForgotPassword />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/footer" element={<Footer />} />
           <Route path="/privacypolicy" element={<PrivacyPolicy />} />

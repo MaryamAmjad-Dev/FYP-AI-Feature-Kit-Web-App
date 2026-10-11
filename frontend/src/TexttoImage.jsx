@@ -1,78 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FaImage, FaSpinner, FaDownload } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
-// ✅ Your Stability API Key
-import { stabiApiKey } from "./api";
-
-const logFeatureUsage = async (userId, feature) => {
-  try {
-    await axios.post("http://localhost:5000/api/feature-usage", {
-      userId,
-      feature,
-    });
-  } catch (err) {
-    console.error("Failed to log feature usage", err);
-  }
-};
+import { extractErrorMessage, generateImage, logFeatureUsage } from './api';
+import { isLoggedIn } from './auth';
 
 export default function TexttoImage() {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
 
   const [prompt, setPrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const imageUrlRef = useRef('');
+
   useEffect(() => {
-    const loginStatus = localStorage.getItem('loggedIn') === 'true';
-    setIsLoggedIn(loginStatus);
-    if (!loginStatus) {
+    const loggedIn = isLoggedIn();
+    setIsLoggedInState(loggedIn);
+    if (!loggedIn) {
       navigate('/login');
-      return;
     }
   }, [navigate]);
-  const generateImage = async () => {
+
+  // Keep track of the generated blob URL so it can be released.
+  useEffect(() => {
+    imageUrlRef.current = imageUrl;
+  }, [imageUrl]);
+
+  // Memory: revoke the last object URL when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+    };
+  }, []);
+
+  const generateImageHandler = async () => {
     if (!prompt.trim()) {
       alert('Please enter a description for the image.');
       return;
     }
 
     setLoading(true);
+    // Release the previous generation before replacing it.
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current);
+      imageUrlRef.current = '';
+    }
     setImageUrl('');
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("prompt", prompt);
-      formData.append("output_format", "png");
-
-      const response = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${stabiApiKey}`,
-          'Accept': 'image/*'
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status} - ${errorText}`);
-      }
-
-      const blob = await response.blob();
+      const blob = await generateImage(prompt);
       const imageObjectUrl = URL.createObjectURL(blob);
+      imageUrlRef.current = imageObjectUrl;
       setImageUrl(imageObjectUrl);
-      // Log feature usage
-      const userData = JSON.parse(localStorage.getItem("userData"));
-      const userId = userData?.id;
-      if (userId) await logFeatureUsage(userId, "text-to-image");
+
+      if (isLoggedInState) await logFeatureUsage('text-to-image');
     } catch (err) {
-      setError(err.message);
-      alert(`Error: ${err.message}`);
+      const message = await extractErrorMessage(err);
+      setError(message);
+      alert(`Error: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -102,7 +91,7 @@ export default function TexttoImage() {
           />
 
           <button
-            onClick={generateImage}
+            onClick={generateImageHandler}
             disabled={loading || !prompt.trim()}
             className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               loading || !prompt.trim()

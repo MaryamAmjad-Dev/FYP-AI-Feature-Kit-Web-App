@@ -1,24 +1,44 @@
-CREATE DATABASE IF NOT EXISTS webai;
-USE webai;
+-- Useful queries / manual setup for the AI Feature Kit (PostgreSQL)
+--
+--   psql -U postgres -d webai -f "Database Queries.sql"
 
 CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
 CREATE TABLE IF NOT EXISTS contact_messages (
-  id INT AUTO_INCREMENT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
 CREATE TABLE IF NOT EXISTS user_feature_usage (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id),
   feature VARCHAR(50) NOT NULL,
-  used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
+  used_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Feature usage per user (what the "History" page can display)
+-- SELECT ufu.id, ufu.feature, ufu.used_at, u.id AS user_id, u.name, u.email
+-- FROM user_feature_usage ufu
+-- JOIN users u ON ufu.user_id = u.id
+-- ORDER BY ufu.used_at DESC;
+
+-- Clean up expired password reset codes
+-- DELETE FROM password_reset_tokens WHERE expires_at < NOW();

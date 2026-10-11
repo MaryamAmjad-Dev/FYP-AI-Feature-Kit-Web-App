@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaRobot, FaBrain, FaCloud, FaRocket, FaLock, FaBolt } from 'react-icons/fa';
+import { isLoggedIn } from './auth';
 
 
 const Home = () => {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
 
   useEffect(() => {
-    setIsLoggedIn(localStorage.getItem('loggedIn') === 'true');
+    setIsLoggedInState(isLoggedIn());
   }, []);
 
   return (
@@ -40,7 +41,7 @@ const Home = () => {
           transition={{ delay: 0.5, duration: 1 }}
           className="flex justify-center gap-6"
         >
-          {!isLoggedIn && (
+          {!isLoggedInState && (
 
           <button
             onClick={() => navigate('/signup')}
@@ -155,7 +156,7 @@ const Home = () => {
         >
           Ready to Build with AI?
         </motion.h2>
-        {!isLoggedIn && (
+        {!isLoggedInState && (
 
         <motion.button
           whileHover={{ scale: 1.1 }}

@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-const logFeatureUsage = async (userId, feature) => {
-  try {
-    await axios.post("http://localhost:5000/api/feature-usage", {
-      userId,
-      feature,
-    });
-  } catch (err) {
-    console.error("Failed to log feature usage", err);
-  }
-};  
+import { logFeatureUsage } from './api';
+import { isLoggedIn } from './auth';
 
 export default function TexttoSpeech() {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
   const [text, setText] = useState('');
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState('');
@@ -24,11 +15,10 @@ export default function TexttoSpeech() {
   const [activeButton, setActiveButton] = useState('');
 
   useEffect(() => {
-    const loginStatus = localStorage.getItem('loggedIn') === 'true';
-    setIsLoggedIn(loginStatus);
-    if (!loginStatus) {
+    const loggedIn = isLoggedIn();
+    setIsLoggedInState(loggedIn);
+    if (!loggedIn) {
       navigate('/login');
-      return;
     }
   }, [navigate]);
   useEffect(() => {
@@ -55,10 +45,8 @@ export default function TexttoSpeech() {
     synth.speak(utter);
     setIsPaused(false);
     // Log feature usage
-    if (buttonName === 'original') {
-      const userData = JSON.parse(localStorage.getItem("userData"));
-      const userId = userData?.id;
-      if (userId) logFeatureUsage(userId, "text-to-speech");
+    if (buttonName === 'original' && isLoggedInState) {
+      logFeatureUsage('text-to-speech');
     }
   };
 

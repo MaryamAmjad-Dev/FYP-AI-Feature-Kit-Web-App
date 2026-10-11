@@ -9,7 +9,7 @@ Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**,
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![Express.js](https://img.shields.io/badge/Express.js-000000?logo=express&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4479A1?logo=postgresql&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Hugging Face](https://img.shields.io/badge/Hugging%20Face-AI-FFD21E?logo=huggingface&logoColor=black)
 
@@ -22,7 +22,7 @@ Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**,
 
 AI Feature Kit Web App is an AI-powered multimedia platform developed as a **Final Year Project (FYP)**. The application combines multiple AI-powered utilities into a single modern web application, allowing users to generate images, convert text into speech, remove image backgrounds, summarize text, and perform other AI-assisted tasks.
 
-The project is designed with a modern React frontend, an Express.js backend, MySQL database integration, and external AI APIs to provide a seamless user experience.
+The project is designed with a modern React frontend, an Express.js backend, PostgreSQL database integration, and external AI APIs to provide a seamless user experience.
 
 ---
 
@@ -54,7 +54,7 @@ The project is designed with a modern React frontend, an Express.js backend, MyS
                   │
        ┌──────────┴──────────┐
        ▼                     ▼
-   MySQL Database      AI APIs
+   PostgreSQL Database  AI APIs
                          │
         ┌────────────────┼────────────────┐
         ▼                ▼                ▼
@@ -80,7 +80,7 @@ The project is designed with a modern React frontend, an Express.js backend, MyS
 
 ## Database
 
-- MySQL
+- PostgreSQL
 
 ## AI APIs
 
@@ -96,14 +96,28 @@ The project is designed with a modern React frontend, an Express.js backend, MyS
 FYP-AI-Feature-Kit-Web-App
 │
 ├── backend
-│   ├── server.js
+│   ├── server.js            # Express app (helmet, CORS, rate limits)
+│   ├── config.js            # loads backend/.env
+│   ├── db.js                # PostgreSQL connection pool + schema bootstrap
+│   ├── auth.js              # JWT signing/verification + auth middleware
+│   ├── validators.js        # server-side input validation
+│   ├── mailer.js            # password-reset emails (nodemailer)
+│   ├── routes/
+│   │   ├── auth.routes.js   # signup, login, me, forgot/reset password
+│   │   ├── usage.routes.js  # feature usage + contact
+│   │   └── ai.routes.js     # Stability / remove.bg / Hugging Face proxy
+│   ├── tests/               # node:test suites
 │   ├── schema.sql
-│   ├── Database Queries.sql
+│   ├── .env.example
 │   └── package.json
 │
 ├── frontend
 │   ├── public
 │   ├── src
+│   │   ├── apiClient.js     # single Axios instance (base URL + auth header)
+│   │   ├── auth.js          # session helpers
+│   │   ├── api.jsx          # AI feature calls (proxied via backend)
+│   │   └── ...
 │   ├── package.json
 │   └── vite.config.js
 │
@@ -135,8 +149,13 @@ cd FYP-AI-Feature-Kit-Web-App
 ```bash
 cd backend
 npm install
+copy .env.example .env   # then fill in your values (Windows)
 npm start
 ```
+
+> **PostgreSQL**: the connection settings live in `backend/.env` (`DATABASE_URL`,
+> or `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, ...).
+> Tables are created automatically on first start (or run `schema.sql` with psql).
 
 ---
 
@@ -148,17 +167,75 @@ npm install
 npm run dev
 ```
 
+In development the Vite dev server proxies `/api` to `http://localhost:5000`,
+so no backend URL (and no API key) has to be configured in the frontend.
+
 ---
 
 # 🔑 Environment Variables
 
-Create a `.env` file inside the `frontend` folder.
+## `backend/.env` (server only — never committed)
 
 ```env
-VITE_STABILITY_API_KEY=YOUR_STABILITY_API_KEY
-VITE_REMOVE_BG_API_KEY=YOUR_REMOVE_BG_API_KEY
-VITE_HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
+PORT=5000
+NODE_ENV=development
+CORS_ORIGINS=http://localhost:5173,http://localhost:4173
+
+# PostgreSQL — either a single connection string ...
+DATABASE_URL=postgresql://postgres:password@localhost:5432/webai
+# ... or the individual settings below (used when DATABASE_URL is empty)
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=
+DB_NAME=webai
+# Set true for hosted databases that require TLS (Neon, Supabase, RDS, ...)
+PG_SSL=false
+
+JWT_SECRET=change-me-to-a-long-random-string
+JWT_EXPIRES_IN=7d
+ADMIN_EMAILS=
+
+# Password-reset emails (optional in dev: the code is printed on the server console)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="AI Feature Kit <no-reply@example.com>"
+
+# Third-party AI keys — server side ONLY
+STABILITY_API_KEY=YOUR_STABILITY_API_KEY
+REMOVE_BG_API_KEY=YOUR_REMOVE_BG_API_KEY
+HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
 ```
+
+## `frontend/.env` (optional)
+
+```env
+# Only needed when the backend is not served from the same origin
+VITE_API_URL=/api
+```
+
+> ⚠️ **Never put API keys in the frontend.** Anything prefixed with `VITE_` is
+> compiled into the public JavaScript bundle and is visible to every visitor.
+> All AI calls are proxied through the backend, which holds the real keys.
+
+---
+
+# 🧪 Tests
+
+```bash
+npm test          # from the repository root
+```
+
+This runs:
+
+- **Unit tests** (`backend/tests/*.test.js`) — validators, password hashing
+  (including the legacy plain-text upgrade), JWT and reset-token handling.
+- **API smoke test** (`backend/tests/api.smoke.mjs`) — boots the real server on
+  a test port and asserts the security behaviour: authentication on protected
+  routes, no unauthenticated password reset, input validation, CORS allow-list,
+  security headers and rate limiting.
 
 ---
 

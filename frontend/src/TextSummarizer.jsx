@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { huggingfaceApiKey } from './api';
+import { extractErrorMessage, logFeatureUsage, summarizeText } from './api';
+import { isLoggedIn } from './auth';
 import {
   FaFileAlt,
   FaSpinner,
@@ -11,30 +11,19 @@ import {
   FaExpand,
   FaCompress,
 } from 'react-icons/fa';
-const logFeatureUsage = async (userId, feature) => {
-  try {
-    await axios.post("http://localhost:5000/api/feature-usage", {
-      userId,
-      feature,
-    });
-  } catch (err) {
-    console.error("Failed to log feature usage", err);
-  }
-};
 
 export default function TextSummarizer() {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedInState, setIsLoggedInState] = useState(false);
   const [text, setText] = useState('');
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   useEffect(() => {
-    const loginStatus = localStorage.getItem('loggedIn') === 'true';
-    setIsLoggedIn(loginStatus);
-    if (!loginStatus) {
+    const loggedIn = isLoggedIn();
+    setIsLoggedInState(loggedIn);
+    if (!loggedIn) {
       navigate('/login');
-      return;
     }
   }, [navigate]);
 
@@ -43,26 +32,15 @@ export default function TextSummarizer() {
 
     setLoading(true);
     try {
-      const response = await fetch('https://api-inference.huggingface.co/models/facebook/bart-large-cnn', {
-        method: 'POST',
-        headers: {
-          Authorization: huggingfaceApiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ inputs: text }),
-      });
-      const data = await response.json();
+      const data = await summarizeText(text);
       if (Array.isArray(data) && data[0]?.summary_text) {
         setSummary(data[0].summary_text);
-        // Log feature usage
-        const userData = JSON.parse(localStorage.getItem("userData"));
-        const userId = userData?.id;
-        if (userId) await logFeatureUsage(userId, "text-summarizer");
+        if (isLoggedInState) await logFeatureUsage('text-summarizer');
       } else {
         setSummary('No summary generated.');
       }
     } catch (error) {
-      alert('Failed to generate summary. Please try again.');
+      alert(await extractErrorMessage(error));
     }
     setLoading(false);
   };
@@ -75,11 +53,14 @@ export default function TextSummarizer() {
   const handleDownload = () => {
     const element = document.createElement('a');
     const file = new Blob([summary], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file);
+    element.href = url;
     element.download = 'summary.txt';
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    // Memory: release the download URL right after the click is dispatched.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   return (

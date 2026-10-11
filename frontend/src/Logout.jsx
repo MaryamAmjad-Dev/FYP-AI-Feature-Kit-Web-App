@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { clearSession } from './auth';
 
 export default function Logout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Clear user session (customize as needed)
-    localStorage.clear();
+    // Clear only our session data (never a blind localStorage.clear())
+    clearSession();
     sessionStorage.clear();
     // Redirect to login after a short delay
     setTimeout(() => {

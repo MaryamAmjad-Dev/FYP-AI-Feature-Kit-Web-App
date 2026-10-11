@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
-import axios from "axios";
+import apiClient from "./apiClient";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -31,9 +31,14 @@ const Signup = () => {
       return;
     }
 
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("Password must be at least 8 characters and contain a letter and a number.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/api/signup", {
+      const res = await apiClient.post("/signup", {
         name: username,
         email,
         password,

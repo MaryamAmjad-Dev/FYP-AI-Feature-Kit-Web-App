@@ -1,6 +1,6 @@
 # AI Feature Kit
 
-A fullstack web application providing a suite of AI-powered tools, built with React (frontend) and Node.js/Express (backend) with a MySQL database.
+A fullstack web application providing a suite of AI-powered tools, built with React (frontend) and Node.js/Express (backend) with a PostgreSQL database.
 
 ## Features
 
@@ -18,8 +18,8 @@ A fullstack web application providing a suite of AI-powered tools, built with Re
 ## Tech Stack
 
 - **Frontend:** React, Vite, Tailwind CSS, Framer Motion, React Router, Axios
-- **Backend:** Node.js, Express, MySQL, CORS, Nodemailer
-- **Database:** MySQL
+- **Backend:** Node.js, Express, PostgreSQL, CORS, Nodemailer
+- **Database:** PostgreSQL
 
 ## Project Structure
 
@@ -27,7 +27,7 @@ A fullstack web application providing a suite of AI-powered tools, built with Re
 ai-kit/
   backend/         # Node.js/Express API server
     server.js      # Main backend server
-    schema.sql     # MySQL schema (users, feedback, feature usage)
+    schema.sql     # PostgreSQL schema (users, contact, feature usage)
     package.json   # Backend dependencies
   frontend/        # React app
     src/           # React components (AI tools, auth, profile, etc.)
@@ -43,7 +43,7 @@ cd ai-kit
 ```
 
 ### 2. Database Setup
-- Create a MySQL database (default: `webai`).
+- Create a PostgreSQL database (default: `webai`).
 - Run the SQL in `backend/schema.sql` to create tables.
 
 ### 3. Backend Setup
