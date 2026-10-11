@@ -204,6 +204,30 @@ try {
     );
   });
 
+  await check('CORS preflight (OPTIONS) answers 204 with allow headers', async () => {
+    const response = await fetch(`${BASE}/api/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    });
+    assert(response.status === 204, 'expected 204, got ' + response.status);
+    assert(
+      response.headers.get('access-control-allow-origin') === 'http://localhost:5173',
+      'missing ACAO header on preflight'
+    );
+    assert(
+      (response.headers.get('access-control-allow-methods') || '').includes('POST'),
+      'POST not in allow-methods'
+    );
+    assert(
+      (response.headers.get('access-control-allow-headers') || '').toLowerCase().includes('content-type'),
+      'content-type not in allow-headers'
+    );
+  });
+
   await check('CORS withholds the header from other origins', async () => {
     const response = await fetch(`${BASE}/api/health`, {
       headers: { Origin: 'http://evil.example' },
