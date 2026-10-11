@@ -15,6 +15,8 @@ Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**,
 
 </div>
 
+> 📚 **Complete documentation** — schema, full API reference, security model,
+> deployment guide and troubleshooting: **[DOCUMENTATION.md](DOCUMENTATION.md)**
 
 ---
 
