@@ -3,9 +3,11 @@ const assert = require('node:assert/strict');
 
 const {
   FEATURES,
+  LIMITS,
   isKnownFeature,
   isValidEmail,
   normalizeEmail,
+  sanitizeProfilePatch,
   validateLogin,
   validateMessage,
   validateName,
@@ -74,4 +76,50 @@ test('validateMessage enforces presence and length', () => {
   assert.equal(validateMessage('Hello there'), null);
   assert.ok(validateMessage(''));
   assert.ok(validateMessage('x'.repeat(5001)));
+});
+
+test('image payload limit fits inside the serverless request ceiling', () => {
+  // ~3MB base64 + JSON framing stays under Vercel's ~4.5MB payload cap; a
+  // larger limit would fail at the platform instead of here.
+  assert.ok(LIMITS.imageBase64 <= 3.5 * 1024 * 1024);
+  assert.ok(LIMITS.imageBase64 > 1024 * 1024);
+});
+
+test('sanitizeProfilePatch only accepts known keys', () => {
+  const patch = sanitizeProfilePatch({
+    role: 'Student',
+    phone: '+92 300 1234567',
+    location: 'Islamabad',
+    bio: 'Builds things',
+    skills: ['React', ' React ', 'Node'],
+    linkedin: 'https://www.linkedin.com/in/ada',
+    github: 'https://github.com/ada',
+    isAdmin: true,
+    token_version: 999,
+  });
+  assert.equal(patch.error, undefined);
+  assert.deepEqual(patch.fields.skills, ['React', 'Node']); // trimmed + deduped
+  assert.equal(patch.fields.role, 'Student');
+  assert.ok(!('isAdmin' in patch.fields));
+  assert.ok(!('token_version' in patch.fields));
+});
+
+test('sanitizeProfilePatch rejects unsafe URLs and oversized fields', () => {
+  assert.ok(sanitizeProfilePatch({ linkedin: 'javascript:alert(1)' }).error);
+  assert.ok(sanitizeProfilePatch({ linkedin: 'http://insecure.example' }).error);
+  assert.ok(sanitizeProfilePatch({ linkedin: 'not a url' }).error);
+  assert.equal(sanitizeProfilePatch({ linkedin: '' }).fields.linkedin, '');
+  assert.ok(sanitizeProfilePatch({ bio: 'x'.repeat(1001) }).error);
+  assert.ok(sanitizeProfilePatch({ skills: 'react,node' }).error);
+  assert.ok(sanitizeProfilePatch({ skills: new Array(21).fill('x') }).error);
+  assert.ok(sanitizeProfilePatch({ skills: [42] }).error);
+  assert.ok(sanitizeProfilePatch('nope').error);
+  assert.ok(sanitizeProfilePatch({ name: '' }).error);
+});
+
+test('sanitizeProfilePatch never stores name inside the profile JSON', () => {
+  const patch = sanitizeProfilePatch({ name: '  Ada  ', role: 'Dev' });
+  assert.equal(patch.name, 'Ada');
+  assert.equal(patch.fields.name, undefined);
+  assert.equal(patch.fields.role, 'Dev');
 });

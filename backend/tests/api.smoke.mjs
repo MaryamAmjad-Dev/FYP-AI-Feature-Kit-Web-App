@@ -5,7 +5,9 @@
 // Starts the real server on a dedicated test port with a throwaway JWT
 // secret, exercises every security-relevant behaviour, then shuts down again.
 // PostgreSQL does not have to be running for the API smoke test: checks that
-// reach the database accept either a successful response or a database error.
+// reach the database accept a database error (500) as well as success, unless
+// SMOKE_REQUIRE_DB=true is set (CI runs the suite against a real database and
+// then a 500 is a genuine failure).
 
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -21,12 +23,13 @@ const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const PORT = process.env.SMOKE_TEST_PORT || '5099';
 const BASE = `http://localhost:${PORT}`;
 const TEST_SECRET = crypto.randomBytes(48).toString('hex');
+const REQUIRE_DB = process.env.SMOKE_REQUIRE_DB === 'true';
 
-const token = jwt.sign(
-  { id: 1, email: 'smoke@example.com', name: 'Smoke' },
-  TEST_SECRET,
-  { expiresIn: '5m' }
-);
+// The token is minted after the database seed attempt below: requireAuth now
+// also checks the token's `ver` claim against users.token_version, so the
+// signing key/id has to match a real row whenever a database is available.
+let token = null;
+let dbAvailable = false;
 
 const server = spawn(process.execPath, ['server.js'], {
   cwd: BACKEND_DIR,
@@ -57,11 +60,48 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function request(pathname, { method = 'GET', body, headers = {} } = {}) {
+/**
+ * Best effort: creates the session owner that requireAuth looks up. Returns
+ * null when no database is reachable, in which case the DB-backed checks
+ * accept a 500 (the auth decision itself is still asserted strictly).
+ */
+async function seedSessionOwner() {
+  let pool = null;
+  try {
+    const { config } = require('../config');
+    const { Pool } = require('pg');
+    const bcrypt = require('bcryptjs');
+    pool = new Pool({
+      ...(config.db.connectionString
+        ? { connectionString: config.db.connectionString }
+        : {
+            host: config.db.host,
+            port: config.db.port,
+            user: config.db.user,
+            password: config.db.password,
+            database: config.db.database,
+          }),
+      connectionTimeoutMillis: 3000,
+    });
+    const { rows } = await pool.query(
+      `INSERT INTO users (name, email, password, token_version)
+       VALUES ('Smoke Tester', $1, $2, 0)
+       RETURNING id, token_version`,
+      [`smoke-${Date.now()}-@example.com`, bcrypt.hashSync('smoke-test-password1', 4)]
+    );
+    return rows[0];
+  } catch (error) {
+    return null;
+  } finally {
+    if (pool) await pool.end().catch(() => {});
+  }
+}
+
+async function request(pathname, { method = 'GET', body, headers = {}, rawBody } = {}) {
   const response = await fetch(BASE + pathname, {
     method,
     headers: { 'Content-Type': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: rawBody !== undefined ? rawBody : body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
   let json = null;
@@ -71,6 +111,13 @@ async function request(pathname, { method = 'GET', body, headers = {} } = {}) {
     /* binary or empty body */
   }
   return { status: response.status, headers: response.headers, json, text };
+}
+
+/** A DB-backed check passes on 200, and on 500 only when no DB is reachable. */
+function assertDataOk(status, expected) {
+  const strict = dbAvailable || REQUIRE_DB;
+  const ok = status === 200 || (!strict && status === 500);
+  assert(ok, `${expected}, got ${status}`);
 }
 
 try {
@@ -88,6 +135,24 @@ try {
     await sleep(250);
   }
   if (!ready) throw new Error('server did not start:\n' + serverLog);
+
+  // Seed a real row (the schema was created by the server on boot) so the
+  // token-version check inside requireAuth has something to compare against.
+  const owner = await seedSessionOwner();
+  dbAvailable = Boolean(owner);
+  token = jwt.sign(
+    {
+      id: owner ? owner.id : 1,
+      email: 'smoke@example.com',
+      name: 'Smoke',
+      ver: owner ? Number(owner.token_version) || 0 : 0,
+    },
+    TEST_SECRET,
+    { expiresIn: '5m' }
+  );
+  if (REQUIRE_DB && !dbAvailable) {
+    results.push(['database seed', 'FAIL', 'SMOKE_REQUIRE_DB=true but no database answered']);
+  }
 
   await check('health endpoint responds', async () => {
     const r = await request('/api/health');
@@ -110,7 +175,8 @@ try {
     const r = await request('/api/feature-usage', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    assert(r.status === 200 || r.status === 500, 'expected 200/500, got ' + r.status);
+    assert(r.status !== 401, 'valid token was rejected with 401');
+    assertDataOk(r.status, 'expected 200' + (REQUIRE_DB ? '' : '/500'));
   });
 
   await check('unknown features are rejected', async () => {
@@ -128,7 +194,7 @@ try {
       headers: { Authorization: `Bearer ${token}` },
       body: { feature: 'text-to-image', userId: 999999 },
     });
-    assert(r.status === 200 || r.status === 500, 'expected 200/500, got ' + r.status);
+    assertDataOk(r.status, 'expected 200' + (REQUIRE_DB ? '' : '/500'));
   });
 
   await check('login validates its input', async () => {
@@ -243,6 +309,68 @@ try {
     assert(response.headers.get('x-content-type-options') === 'nosniff', 'missing nosniff');
     assert(response.headers.get('x-frame-options'), 'missing frame options');
     assert(response.headers.get('x-powered-by') === null, 'x-powered-by leaked');
+  });
+
+  await check('logout clears the session cookie (httpOnly, path, same-site)', async () => {
+    const r = await request('/api/logout', { method: 'POST' });
+    assert(r.status === 200, 'expected 200, got ' + r.status);
+    const cookie = (r.headers.getSetCookie ? r.headers.getSetCookie() : []).join('; ') ||
+      (r.headers.get('set-cookie') || '');
+    assert(/afk_session=/.test(cookie), 'session cookie not cleared: ' + cookie);
+    assert(/httponly/i.test(cookie), 'session cookie is not httpOnly: ' + cookie);
+    assert(/path=\//i.test(cookie), 'session cookie path missing: ' + cookie);
+    assert(/expires=thu, 01 jan 1970|max-age=0/i.test(cookie), 'cookie not expired: ' + cookie);
+  });
+
+  await check('session cookie is sent as SameSite and credentials are allowed', async () => {
+    const response = await fetch(`${BASE}/api/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Access-Control-Request-Method': 'PATCH',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    });
+    assert(response.status === 204, 'expected 204, got ' + response.status);
+    assert(
+      (response.headers.get('access-control-allow-methods') || '').includes('PATCH'),
+      'PATCH not allowed in preflight'
+    );
+    assert(
+      response.headers.get('access-control-allow-credentials') === 'true',
+      'credentials header missing (cookie auth would fail cross-origin)'
+    );
+  });
+
+  await check('oversized JSON bodies are rejected before they reach a route', async () => {
+    const r = await request('/api/login', {
+      method: 'POST',
+      rawBody: JSON.stringify({ email: 'a@b.com', pad: 'x'.repeat(2 * 1024 * 1024) }),
+    });
+    assert(r.status === 413, 'expected 413 for a >1mb body, got ' + r.status);
+  });
+
+  await check('admin endpoints reject non-admin sessions', async () => {
+    const r = await request('/api/admin/contact-messages', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert(r.status === 403, 'expected 403, got ' + r.status);
+  });
+
+  await check('profile rejects non-https links and unknown fields', async () => {
+    const bad = await request('/api/profile', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { linkedin: 'javascript:alert(1)' },
+    });
+    assert(bad.status === 400, 'expected 400 for javascript: URL, got ' + bad.status);
+
+    const oversized = await request('/api/profile', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { bio: 'x'.repeat(5000) },
+    });
+    assert(oversized.status === 400, 'expected 400 for oversized bio, got ' + oversized.status);
   });
 
   await check('credential endpoints are rate limited', async () => {

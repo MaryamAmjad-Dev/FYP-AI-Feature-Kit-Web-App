@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const { config } = require('./config');
+const logger = require('./logger');
 
 let transporter = null;
 
@@ -26,11 +27,11 @@ async function sendPasswordResetEmail(toEmail, token) {
 
   if (!config.smtp.enabled) {
     if (config.isProduction) {
-      console.error('[mailer] SMTP is not configured — cannot deliver password reset emails.');
+      logger.error('SMTP is not configured — cannot deliver password reset emails');
       return false;
     }
-    console.warn(`[mailer] SMTP not configured. Password reset code for ${toEmail}: ${token}`);
-    console.warn(`[mailer] Reset link: ${resetUrl}`);
+    // Development only: hand the code to whoever can read the server console.
+    logger.warn('password reset code (dev, SMTP not configured)', { email: toEmail, token, resetUrl });
     return 'console';
   }
 
@@ -51,7 +52,7 @@ async function sendPasswordResetEmail(toEmail, token) {
     });
     return true;
   } catch (error) {
-    console.error('[mailer] Failed to send password reset email:', error.message);
+    logger.error('failed to send password reset email', { message: error.message });
     return false;
   }
 }

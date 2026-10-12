@@ -4,6 +4,7 @@
 // app that `npm start` runs locally.
 const app = require('../server.js');
 const { initSchema } = require('../db');
+const logger = require('../logger');
 
 // Create the tables once per cold start (a no-op when SKIP_SCHEMA_INIT=true).
 // The promise is cached, so it runs at most once per serverless instance.
@@ -16,7 +17,7 @@ module.exports = (req, res) => {
 
   if (!ready) {
     ready = initSchema().catch((error) => {
-      console.error('Schema init failed:', error.message);
+      logger.error('schema init failed', { message: error.message });
     });
   }
   return ready.then(() => app(req, res));

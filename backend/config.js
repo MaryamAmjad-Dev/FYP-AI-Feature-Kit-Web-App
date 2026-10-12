@@ -1,10 +1,12 @@
 const path = require('path');
 const dotenv = require('dotenv');
+const logger = require('./logger');
 
 // Load backend/.env (all secrets live here — never in source code)
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
 
 const toList = (value) =>
   (value || '')
@@ -15,26 +17,73 @@ const toList = (value) =>
 // TRUST_PROXY env var -> the value Express understands:
 // "true" -> true, "1" -> 1 (hop count), "loopback"/"10.0.0.0/8" -> kept as is.
 function parseTrustProxy(value) {
-  if (!value || value === 'false') return null;
-  if (value === 'true') return true;
-  if (/^\d+$/.test(value)) return Number(value);
-  return value;
+  if (value !== undefined && value !== null && value !== '') {
+    if (value === 'false') return null;
+    if (value === 'true') return true;
+    if (/^\d+$/.test(value)) return Number(value);
+    return value;
+  }
+  // Not configured: on Vercel (or any obvious proxy platform) default to one
+  // hop, otherwise every visitor shares the proxy's IP and the rate limiter
+  // locks out the whole site. Everywhere else stay on the safe default.
+  if (process.env.VERCEL) return 1;
+  return null;
+}
+
+// CORS origins. Two safety rules, both fail closed:
+//   1. A bare "*" (allow every site) is never accepted.
+//   2. Host wildcards (https://*.example.com) must be opted into explicitly
+//      with CORS_ALLOW_WILDCARD=true — a wildcard such as https://*.vercel.app
+//      would trust every Vercel deployment ever created.
+function parseCorsOrigins(raw) {
+  const patterns = toList(raw);
+  const allowed = [];
+  for (const pattern of patterns) {
+    if (!pattern.includes('://') || /^\*+:\/\/\*$/.test(pattern) || pattern === '*') {
+      logger.warn('cors origin ignored — a bare "*" (or scheme-less pattern) is never allowed', {
+        pattern,
+      });
+      continue;
+    }
+    if (pattern.includes('*') && process.env.CORS_ALLOW_WILDCARD !== 'true') {
+      logger.warn('cors origin ignored — wildcard host needs CORS_ALLOW_WILDCARD=true', {
+        pattern,
+      });
+      continue;
+    }
+    allowed.push(pattern);
+  }
+  return allowed;
 }
 
 const config = {
   port: Number(process.env.PORT) || 5000,
   nodeEnv,
-  isProduction: nodeEnv === 'production',
+  isProduction,
 
   // Origins allowed to call the API from a browser. Supports a wildcard in
-  // the host, e.g. https://*.maryamamjad-projects.vercel.app (every deploy
-  // gets its own URL, so an exact alias alone is not enough).
-  corsOrigins: toList(process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173'),
+  // the host (opt-in, see parseCorsOrigins), e.g. https://*.example.com.
+  corsOrigins: parseCorsOrigins(
+    process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173'
+  ),
 
   // Set to e.g. "loopback", "1" or "true" when running behind a reverse
   // proxy so that rate limiting sees the real client IP.
-  // (Vercel needs TRUST_PROXY=1)
+  // (Vercel needs TRUST_PROXY=1 — defaulted above when process.env.VERCEL is set)
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+
+  // Session cookie (httpOnly — never readable from JavaScript, so an XSS
+  // cannot steal the token the way it could from localStorage).
+  cookie: {
+    name: 'afk_session',
+    // sameSite:"none" is required when the frontend runs on another origin
+    // (two Vercel projects); it forces Secure, which is fine behind HTTPS.
+    // Plain http dev servers get a same-site cookie instead.
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProduction,
+    sameSite: process.env.COOKIE_SAMESITE || (isProduction ? 'none' : 'lax'),
+    maxAgeMs: Number(process.env.COOKIE_MAX_AGE_DAYS || 7) * 24 * 60 * 60 * 1000,
+    path: '/',
+  },
 
   db: {
     // Full connection string, e.g. postgresql://user:pass@localhost:5432/webai
@@ -65,6 +114,16 @@ const config = {
   resetTokenTtlMs: Number(process.env.RESET_TOKEN_TTL_MINUTES || 30) * 60 * 1000,
 
   appUrl: process.env.APP_URL || 'http://localhost:5173',
+
+  // Rate limits (all overridable per environment / plan)
+  rateLimits: {
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    global: Number(process.env.RATE_LIMIT_GLOBAL) || 300,
+    credentials: Number(process.env.RATE_LIMIT_CREDENTIALS) || 60,
+    contact: Number(process.env.RATE_LIMIT_CONTACT) || 5,
+    aiWindowMs: Number(process.env.RATE_LIMIT_AI_WINDOW_MS) || 60 * 1000,
+    ai: Number(process.env.RATE_LIMIT_AI) || 20,
+  },
 
   smtp: {
     host: process.env.SMTP_HOST || '',
@@ -99,4 +158,4 @@ function isOriginAllowed(origin) {
   return config.corsOrigins.some((pattern) => originMatches(pattern, origin));
 }
 
-module.exports = { config, originMatches, isOriginAllowed };
+module.exports = { config, isOriginAllowed, originMatches, parseCorsOrigins };

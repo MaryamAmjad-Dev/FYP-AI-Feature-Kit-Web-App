@@ -5,6 +5,8 @@ const helmet = require('helmet');
 const { rateLimit } = require('express-rate-limit');
 
 const { initSchema, closePool } = require('./db');
+const { createSharedStore } = require('./rateLimitStore');
+const logger = require('./logger');
 const authRoutes = require('./routes/auth.routes');
 const usageRoutes = require('./routes/usage.routes');
 const aiRoutes = require('./routes/ai.routes');
@@ -15,7 +17,7 @@ app.disable('x-powered-by');
 
 // Behind a reverse proxy the client IP must come from X-Forwarded-For,
 // otherwise every request would share one rate-limit bucket.
-// On Vercel set TRUST_PROXY=1 (one proxy hop).
+// On Vercel TRUST_PROXY defaults to 1 (see config.js).
 if (config.trustProxy !== null) {
   app.set('trust proxy', config.trustProxy);
 }
@@ -29,25 +31,50 @@ app.use(
 );
 
 // CORS: only the origins configured in .env (empty origin = non-browser client)
+// credentials:true is required for the httpOnly session cookie; combined with
+// the strict origin allow-list and JSON-only bodies this stays CSRF-safe.
 app.use(
   cors({
     origin: (origin, callback) => callback(null, !origin || isOriginAllowed(origin)),
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
     optionsSuccessStatus: 204,
   })
 );
 
-// 25mb so images can travel as base64 through the AI proxy endpoints
-// (the JSON parser limit is what actually caps the upload size)
-app.use(express.json({ limit: '25mb' }));
+// Access log (no query strings — they may carry user input — no bodies).
+app.use((req, res, next) => {
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    if (req.originalUrl.startsWith('/api/health')) return;
+    const ms = Math.round(Number(process.hrtime.bigint() - started) / 1e4) / 100;
+    logger.info('request', {
+      method: req.method,
+      path: req.originalUrl.split('?')[0],
+      status: res.statusCode,
+      ms,
+    });
+  });
+  next();
+});
 
-// Global API rate limit
+// Body size: 1mb everywhere (login, contact, prompts) so a giant JSON body
+// cannot be used to exhaust memory. The background-removal proxy is the one
+// endpoint that legitimately needs a large payload, so it gets its own parser
+// mounted before the global one — body-parser skips a request it already read.
+app.use('/api/ai/remove-bg', express.json({ limit: '25mb' }));
+app.use(express.json({ limit: '1mb' }));
+
+// Global API rate limit. With UPSTASH_REDIS_REST_URL/TOKEN set the counters
+// are shared across serverless instances; otherwise they are per process.
+const sharedStore = createSharedStore();
 app.use(
   '/api',
   rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 300,
+    windowMs: config.rateLimits.windowMs,
+    limit: config.rateLimits.global,
+    ...(sharedStore ? { store: sharedStore } : {}),
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     handler: (req, res, next, options) =>
@@ -77,20 +104,27 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ success: false, message: 'Invalid JSON body.' });
   }
-  console.error('Unhandled error:', err);
+  logger.error('unhandled error', {
+    method: req.method,
+    path: (req.originalUrl || '').split('?')[0],
+    message: err.message,
+    stack: config.isProduction ? undefined : err.stack,
+  });
   return res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
 async function start() {
   try {
     await initSchema();
-    console.log('Database schema ready');
+    logger.info('database schema ready');
   } catch (error) {
-    console.error('Could not initialise schema (is PostgreSQL running?):', error.message);
+    logger.error('could not initialise schema (is PostgreSQL running?)', {
+      message: error.message,
+    });
   }
 
   app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port}`);
+    logger.info('server listening', { port: config.port, env: config.nodeEnv });
   });
 }
 

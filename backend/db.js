@@ -1,5 +1,8 @@
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 const { config } = require('./config');
+const logger = require('./logger');
 
 // PostgreSQL connection pool: it transparently reconnects, keeps idle
 // connections alive and can serve concurrent requests.
@@ -24,45 +27,38 @@ const pool = new Pool({
 });
 
 pool.on('error', (error) => {
-  console.error('PostgreSQL pool error:', error.message);
+  logger.error('PostgreSQL pool error', { message: error.message });
 });
 
 // node-pg already returns promises, so the API is: db.query(text, params)
 const db = pool;
 
-const SCHEMA = `
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-  );
+const SCHEMA_FILE = path.join(__dirname, 'schema.sql');
 
-  CREATE TABLE IF NOT EXISTS contact_messages (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-  );
+// schema.sql is the single source of truth (see the header comment there).
+// The app runs only the DDL it understands: psql meta-commands (\c, \gexec)
+// and the manual "CREATE DATABASE ..." helper are skipped.
+function loadSchemaStatements() {
+  const raw = fs
+    .readFileSync(SCHEMA_FILE, 'utf8')
+    // psql meta-commands on their own line: "\c webai", "..." \gexec, ...
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('\\'))
+    .join('\n')
+    // the "SELECT 'CREATE DATABASE ...' \gexec" helper for manual setups
+    .replace(/SELECT\s+'CREATE DATABASE[\s\S]*?gexec/gi, '');
 
-  CREATE TABLE IF NOT EXISTS user_feature_usage (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id),
-    feature VARCHAR(50) NOT NULL,
-    used_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS password_reset_tokens (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash CHAR(64) NOT NULL UNIQUE,
-    expires_at TIMESTAMPTZ NOT NULL,
-    used_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-  );
-`;
+  const statements = [];
+  for (const chunk of raw.split(';')) {
+    const lines = chunk.split('\n');
+    // Start at the first DDL keyword so leading comments/notes are dropped
+    // together with anything the app should not execute.
+    const start = lines.findIndex((line) => /^(create|alter|delete)\b/i.test(line.trim()));
+    if (start === -1) continue;
+    statements.push(lines.slice(start).join('\n').trim());
+  }
+  return statements;
+}
 
 async function initSchema() {
   // On Vercel the tables are usually created once in the Neon SQL editor;
@@ -71,8 +67,16 @@ async function initSchema() {
 
   // node-pg allows several statements in one call as long as there are no
   // parameters; we still run them one by one so a failure points at one table.
-  for (const statement of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) {
-    await pool.query(statement);
+  for (const statement of loadSchemaStatements()) {
+    try {
+      await pool.query(statement);
+    } catch (error) {
+      logger.error('schema statement failed', {
+        message: error.message,
+        statement: statement.slice(0, 160).replace(/\s+/g, ' '),
+      });
+      throw error;
+    }
   }
 }
 

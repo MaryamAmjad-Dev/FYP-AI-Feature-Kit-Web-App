@@ -1,22 +1,45 @@
 const express = require('express');
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const { db } = require('../db');
-const { isAdmin, requireAuth } = require('../auth');
-const { asString, isKnownFeature, isValidEmail, normalizeEmail, validateMessage, validateName } = require('../validators');
+const { config } = require('../config');
+const { isAdmin, requireAdmin, requireAuth } = require('../auth');
+const logger = require('../logger');
+const {
+  asString,
+  isKnownFeature,
+  isValidEmail,
+  normalizeEmail,
+  validateMessage,
+  validateName,
+} = require('../validators');
 
 const router = express.Router();
 
+// Contact form: keyed on IP *and* email so rotating one of the two does not
+// buy a fresh quota, with a small per-window budget (spam is the goal here).
 const contactLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
+  windowMs: config.rateLimits.windowMs,
+  limit: config.rateLimits.contact,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = normalizeEmail((req.body || {}).email);
+    const ip = ipKeyGenerator(req.ip || '');
+    return email ? `${ip}|${email}` : ip;
+  },
   handler: (req, res, next, options) =>
     res
       .status(options.statusCode)
-      .json({ success: false, message: 'Too many requests. Please try again later.' }),
+      .json({ success: false, message: 'Too many messages. Please try again later.' }),
 });
+
+/** limit/offset with sane bounds (max 100 rows per page). */
+function parsePagination(query) {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 100);
+  const offset = Math.max(parseInt(query.offset, 10) || 0, 0);
+  return { limit, offset };
+}
 
 // POST /api/feature-usage — authenticated; the user id comes from the token,
 // never from the request body (a client cannot log usage for someone else).
@@ -35,7 +58,7 @@ router.post('/feature-usage', requireAuth, async (req, res) => {
     ]);
     return res.json({ success: true });
   } catch (error) {
-    console.error('Feature usage log error:', error);
+    logger.error('feature usage log failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error logging feature usage' });
   }
 });
@@ -43,27 +66,46 @@ router.post('/feature-usage', requireAuth, async (req, res) => {
 // GET /api/feature-usage — authenticated: admins see everything,
 // everyone else sees only their own history (no PII of other users).
 router.get('/feature-usage', requireAuth, async (req, res) => {
+  const { limit, offset } = parsePagination(req.query || {});
   try {
     if (isAdmin(req.user.email)) {
       const { rows } = await db.query(
         `SELECT ufu.id, ufu.feature, ufu.used_at, u.id as user_id, u.name, u.email
          FROM user_feature_usage ufu
          JOIN users u ON ufu.user_id = u.id
-         ORDER BY ufu.used_at DESC`
+         ORDER BY ufu.used_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
       );
-      return res.json({ success: true, scope: 'all', usage: rows });
+      const total = await db.query('SELECT COUNT(*)::int AS total FROM user_feature_usage');
+      return res.json({
+        success: true,
+        scope: 'all',
+        usage: rows,
+        pagination: { limit, offset, total: total.rows[0].total },
+      });
     }
 
     const { rows } = await db.query(
       `SELECT id, feature, used_at
        FROM user_feature_usage
        WHERE user_id = $1
-       ORDER BY used_at DESC`,
+       ORDER BY used_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.user.id, limit, offset]
+    );
+    const total = await db.query(
+      'SELECT COUNT(*)::int AS total FROM user_feature_usage WHERE user_id = $1',
       [req.user.id]
     );
-    return res.json({ success: true, scope: 'own', usage: rows });
+    return res.json({
+      success: true,
+      scope: 'own',
+      usage: rows,
+      pagination: { limit, offset, total: total.rows[0].total },
+    });
   } catch (error) {
-    console.error('Feature usage fetch error:', error);
+    logger.error('feature usage fetch failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error fetching feature usage' });
   }
 });
@@ -91,8 +133,29 @@ router.post('/contact', contactLimiter, async (req, res) => {
     ]);
     return res.json({ success: true, message: 'Feedback sent and saved!' });
   } catch (error) {
-    console.error('Contact error:', error);
+    logger.error('contact insert failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error sending feedback.' });
+  }
+});
+
+// GET /api/admin/contact-messages — admins only, paginated (messages are
+// write-only otherwise, which made the table unread dead weight).
+router.get('/admin/contact-messages', requireAuth, requireAdmin, async (req, res) => {
+  const { limit, offset } = parsePagination(req.query || {});
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, email, message, created_at FROM contact_messages ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    const total = await db.query('SELECT COUNT(*)::int AS total FROM contact_messages');
+    return res.json({
+      success: true,
+      messages: rows,
+      pagination: { limit, offset, total: total.rows[0].total },
+    });
+  } catch (error) {
+    logger.error('contact fetch failed', { message: error.message });
+    return res.status(500).json({ success: false, message: 'Error fetching messages.' });
   }
 });
 

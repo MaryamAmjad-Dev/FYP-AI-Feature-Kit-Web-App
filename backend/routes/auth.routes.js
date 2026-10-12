@@ -3,11 +3,14 @@ const { rateLimit } = require('express-rate-limit');
 
 const { db } = require('../db');
 const { config } = require('../config');
+const logger = require('../logger');
 const {
+  clearSessionCookie,
   generateResetToken,
   hashResetToken,
   isValidResetTokenFormat,
   requireAuth,
+  setSessionCookie,
   signToken,
 } = require('../auth');
 const { compareAgainstDummy, hashPassword, verifyPassword } = require('../passwords');
@@ -16,6 +19,7 @@ const {
   asString,
   isValidEmail,
   normalizeEmail,
+  sanitizeProfilePatch,
   validateLogin,
   validatePassword,
   validateSignup,
@@ -23,13 +27,12 @@ const {
 
 const router = express.Router();
 
-// Brute-force protection for credential endpoints.
 // Brute-force protection for login/signup/password-reset.
-// The counter is in-memory per serverless instance, so keep the limit
-// forgiving (a classroom/viva network shares one public IP).
+// The counter is in-memory (or shared via Upstash when configured), so keep
+// the limit forgiving — a classroom/viva network shares one public IP.
 const credentialLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 60,
+  windowMs: config.rateLimits.windowMs,
+  limit: config.rateLimits.credentials,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: (req, res, next, options) =>
@@ -41,6 +44,23 @@ const credentialLimiter = rateLimit({
 function isDuplicateEntry(error) {
   // 23505 = unique_violation (users_email_key)
   return error && error.code === '23505';
+}
+
+/** Shape a users row (with profile JSONB) for API responses. */
+function publicUser(row) {
+  const profile = (row && row.profile && typeof row.profile === 'object') ? row.profile : {};
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: profile.role || '',
+    phone: profile.phone || '',
+    location: profile.location || '',
+    bio: profile.bio || '',
+    skills: Array.isArray(profile.skills) ? profile.skills : [],
+    linkedin: profile.linkedin || '',
+    github: profile.github || '',
+  };
 }
 
 // POST /api/signup
@@ -74,16 +94,18 @@ router.post('/signup', credentialLimiter, async (req, res) => {
         .status(409)
         .json({ success: false, message: 'An account with this email already exists.' });
     }
-    console.error('Signup error:', error);
+    logger.error('signup failed', { code: error.code, message: error.message });
     return res.status(500).json({ success: false, message: 'Error creating user' });
   }
 });
 
-// POST /api/login
+// POST /api/login — the JWT travels back as an httpOnly cookie, never in the
+// response body, so page JavaScript cannot read it.
 router.post('/login', credentialLimiter, async (req, res) => {
   const body = req.body || {};
   const email = normalizeEmail(body.email);
   const password = asString(body.password);
+  const remember = body.rememberMe === true || body.rememberMe === 'true';
 
   const validationError = validateLogin({ email, password });
   if (validationError) {
@@ -92,7 +114,7 @@ router.post('/login', credentialLimiter, async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, password FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, name, email, password, profile, token_version FROM users WHERE email = $1 LIMIT 1',
       [email]
     );
     const user = rows[0];
@@ -113,25 +135,63 @@ router.post('/login', credentialLimiter, async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
 
-    const token = signToken(user);
+    setSessionCookie(res, signToken(user), { remember });
     return res.json({
       success: true,
       message: 'Login successful',
-      token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: publicUser(user),
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('login failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error during login' });
   }
 });
 
+// POST /api/logout — drops the session cookie on this device.
+router.post('/logout', (req, res) => {
+  clearSessionCookie(res);
+  return res.json({ success: true, message: 'Logged out.' });
+});
+
 // GET /api/me — lets the client verify a stored session.
-router.get('/me', requireAuth, (req, res) => {
-  res.json({
-    success: true,
-    user: { id: req.user.id, name: req.user.name, email: req.user.email },
-  });
+router.get('/me', requireAuth, async (req, res) => {
+  const { rows } = await db.query('SELECT id, name, email, profile FROM users WHERE id = $1 LIMIT 1', [
+    req.user.id,
+  ]);
+  if (!rows[0]) {
+    return res.status(401).json({ success: false, message: 'Session is invalid or has expired.' });
+  }
+  return res.json({ success: true, user: publicUser(rows[0]) });
+});
+
+// PATCH /api/profile — persists the profile editor (role, contact, bio, skills).
+router.patch('/profile', requireAuth, async (req, res) => {
+  const patch = sanitizeProfilePatch(req.body || {});
+  if (patch.error) {
+    return res.status(400).json({ success: false, message: patch.error });
+  }
+
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, email, profile FROM users WHERE id = $1 LIMIT 1',
+      [req.user.id]
+    );
+    if (!rows[0]) {
+      return res.status(401).json({ success: false, message: 'Session is invalid or has expired.' });
+    }
+
+    const profile = { ...(rows[0].profile || {}), ...patch.fields };
+    const name = patch.name !== undefined ? patch.name : rows[0].name;
+
+    const updated = await db.query(
+      'UPDATE users SET name = $1, profile = $2 WHERE id = $3 RETURNING id, name, email, profile',
+      [name, profile, req.user.id]
+    );
+    return res.json({ success: true, user: publicUser(updated.rows[0]) });
+  } catch (error) {
+    logger.error('profile update failed', { message: error.message });
+    return res.status(500).json({ success: false, message: 'Error updating profile.' });
+  }
 });
 
 // POST /api/forgot-password — step 1: issue a one-time code (never a raw reset).
@@ -166,7 +226,7 @@ router.post('/forgot-password', credentialLimiter, async (req, res) => {
         });
       }
       if (delivered === false && config.isProduction) {
-        console.error('[forgot-password] Could not deliver reset email and SMTP is unavailable.');
+        logger.error('password reset email could not be delivered (SMTP not configured)');
       }
     }
 
@@ -176,7 +236,7 @@ router.post('/forgot-password', credentialLimiter, async (req, res) => {
       message: 'If an account exists for that email, a password reset code has been sent.',
     });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('forgot-password failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error processing password reset.' });
   }
 });
@@ -219,14 +279,16 @@ router.post('/reset-password', credentialLimiter, async (req, res) => {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await db.query('UPDATE users SET password = $1 WHERE id = $2', [
+    // token_version++ revokes every JWT issued before the reset: a stolen
+    // session dies the moment the real owner changes the password.
+    await db.query('UPDATE users SET password = $1, token_version = token_version + 1 WHERE id = $2', [
       hashedPassword,
       record.user_id,
     ]);
 
     return res.json({ success: true, message: 'Password updated successfully. You can now log in.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('reset-password failed', { message: error.message });
     return res.status(500).json({ success: false, message: 'Error updating password.' });
   }
 });

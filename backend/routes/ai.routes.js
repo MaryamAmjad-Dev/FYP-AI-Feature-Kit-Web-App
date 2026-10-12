@@ -1,8 +1,9 @@
 const express = require('express');
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const { config } = require('../config');
 const { requireAuth } = require('../auth');
+const logger = require('../logger');
 const { LIMITS, asString } = require('../validators');
 
 const router = express.Router();
@@ -11,10 +12,11 @@ const UPSTREAM_TIMEOUT_MS = 45000;
 
 // AI endpoints are relatively expensive: keep a tighter budget per IP.
 const aiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 20,
+  windowMs: config.rateLimits.aiWindowMs,
+  limit: config.rateLimits.ai,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
   handler: (req, res, next, options) =>
     res
       .status(options.statusCode)
@@ -49,18 +51,39 @@ async function failUpstream(res, upstream, fallbackMessage) {
   } catch {
     /* body unavailable */
   }
-  console.error(`[ai] upstream responded ${upstream.status}: ${detail}`);
+  logger.error('upstream provider error', { status: upstream.status, detail });
   return res.status(502).json({ success: false, message: fallbackMessage });
 }
 
 function requireKey(res, key, name) {
   if (key) return true;
-  console.error(`[ai] ${name} is not configured on the server.`);
+  logger.error('AI key not configured', { provider: name });
   res.status(503).json({
     success: false,
     message: `${name} is not configured on the server. Add it to backend/.env.`,
   });
   return false;
+}
+
+/**
+ * The upstream model may answer with [{ summary_text }], an object, or an
+ * error payload. Only a well-formed summary is forwarded — the raw provider
+ * response never reaches the client.
+ */
+function normalizeSummary(data) {
+  let list = null;
+  if (Array.isArray(data)) {
+    list = data;
+  } else if (data && typeof data.summary_text === 'string') {
+    list = [{ summary_text: data.summary_text }];
+  } else if (data && Array.isArray(data.summary_text)) {
+    list = data.summary_text.map((text) => (typeof text === 'string' ? { summary_text: text } : text));
+  }
+  if (!list) return null;
+  const items = list
+    .filter((item) => item && typeof item.summary_text === 'string' && item.summary_text.trim())
+    .map((item) => ({ summary_text: item.summary_text.trim() }));
+  return items.length ? items : null;
 }
 
 // POST /api/ai/text-to-image  { prompt }
@@ -97,7 +120,7 @@ router.post('/text-to-image', async (req, res) => {
     res.set('Content-Type', upstream.headers.get('content-type') || 'image/png');
     return res.send(buffer);
   } catch (error) {
-    console.error('[ai] text-to-image error:', error.message);
+    logger.error('text-to-image failed', { message: error.message });
     return res.status(502).json({ success: false, message: 'Image generation failed.' });
   }
 });
@@ -140,7 +163,7 @@ router.post('/remove-bg', async (req, res) => {
     res.set('Content-Type', upstream.headers.get('content-type') || 'image/png');
     return res.send(buffer);
   } catch (error) {
-    console.error('[ai] remove-bg error:', error.message);
+    logger.error('remove-bg failed', { message: error.message });
     return res.status(502).json({ success: false, message: 'Background removal failed.' });
   }
 });
@@ -175,9 +198,16 @@ router.post('/summarize', async (req, res) => {
     }
 
     const data = await upstream.json();
-    return res.json(data);
+    const summary = normalizeSummary(data);
+    if (!summary) {
+      logger.error('unexpected summarizer response shape', { keys: Object.keys(data || {}) });
+      return res
+        .status(502)
+        .json({ success: false, message: 'Summarization failed. Please try again.' });
+    }
+    return res.json(summary);
   } catch (error) {
-    console.error('[ai] summarize error:', error.message);
+    logger.error('summarize failed', { message: error.message });
     return res.status(502).json({ success: false, message: 'Summarization failed.' });
   }
 });
