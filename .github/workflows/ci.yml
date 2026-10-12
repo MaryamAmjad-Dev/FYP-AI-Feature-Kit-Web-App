@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (tests + audit)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: audit
+          POSTGRES_PASSWORD: audit
+          POSTGRES_DB: webai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U audit -d webai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_USER: audit
+      DB_PASSWORD: audit
+      DB_NAME: webai
+      # Fail the job instead of quietly accepting a 500 when the DB is down.
+      SMOKE_REQUIRE_DB: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Unit + API smoke tests (against a real database)
+        working-directory: backend
+        run: npm run test:all
+      - name: Dependency audit (production)
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
+  frontend:
+    name: Frontend (lint + build + audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+      - name: Dependency audit (all)
+        working-directory: frontend
+        run: npm audit --audit-level=high

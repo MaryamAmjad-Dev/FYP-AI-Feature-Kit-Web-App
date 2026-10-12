@@ -275,8 +275,10 @@ from this repository, with a **Neon** PostgreSQL database.
 
 - **Payload limit**: Vercel functions accept ~4.5 MB per request/response, so
   very large images through *Remove Background* may fail on the free tier.
-- **Rate limiting** uses an in-memory store per function instance — perfect
-  for a demo/viva, not a substitute for a shared store at scale.
+- **Rate limiting** defaults to an in-memory store per function instance — fine
+  for a demo/viva. Set `UPSTASH_REDIS_REST_URL` +
+  `UPSTASH_REDIS_REST_TOKEN` to move the counters into Upstash Redis so they
+  are shared across every cold start.
 - **Cold starts**: the first request after idle takes ~1–2 s (serverless).
 
 ---
@@ -289,12 +291,25 @@ npm test          # from the repository root
 
 This runs:
 
-- **Unit tests** (`backend/tests/*.test.js`) — validators, password hashing
-  (including the legacy plain-text upgrade), JWT and reset-token handling.
-- **API smoke test** (`backend/tests/api.smoke.mjs`) — boots the real server on
-  a test port and asserts the security behaviour: authentication on protected
-  routes, no unauthenticated password reset, input validation, CORS allow-list,
-  security headers and rate limiting.
+- **Unit tests** (`backend/tests/*.test.js`) — **28 checks**: validators
+  (including the 3 MB image cap and profile URL rules), password hashing
+  (including the legacy plain-text upgrade), JWT/session-revocation handling
+  and CORS wildcard gating.
+- **API smoke test** (`backend/tests/api.smoke.mjs`) — **23 live checks**:
+  boots the real server on a test port and asserts the security behaviour —
+  authentication on protected routes, cookie attributes, session revocation
+  after a password reset, no unauthenticated password reset, input validation,
+  CORS allow-list + credentials, security headers, body-size limits, admin
+  gating and rate limiting.
+
+```bash
+# from backend/ — full suite against a real database
+DB_HOST=… DB_USER=… DB_NAME=… SMOKE_REQUIRE_DB=true npm run test:all
+```
+
+CI (`.github/workflows/ci.yml`) runs exactly that on every push and pull
+request: backend unit + smoke tests against a Postgres 16 service container,
+frontend lint + production build, and `npm audit` on both packages.
 
 ---
 

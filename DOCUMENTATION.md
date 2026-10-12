@@ -144,13 +144,17 @@ voice tone — every usage is tracked for analytics.
 
 **Request flow (example — generate an image):**
 
-1. Browser `POST /api/ai/text-to-image` with the JWT in `Authorization: Bearer`
+1. Browser `POST /api/ai/text-to-image` with the session cookie
+   (`afk_session`, httpOnly) — or `Authorization: Bearer <token>` for
+   non-browser clients
 2. Vercel routes `/api/*` → the Express function
-3. `requireAuth` verifies the JWT (secret only on the server)
+3. `requireAuth` verifies the JWT (secret only on the server) and checks that
+   `token_version` still matches the `ver` claim (revokes every session after
+   a password reset)
 4. Backend validates the prompt (length/shape), then calls Stability AI **with
    the server-side key**, receives the image and returns it as base64 JSON
 5. Usage row is inserted into `user_feature_usage`
-6. Frontend renders the image; on any 401 it clears the session → login page
+6. Frontend renders the image; on any 401 it clears the local session → login page
 
 ---
 
@@ -191,8 +195,9 @@ FYP-AI-Feature-Kit-Web-App/
     ├── src/
     │   ├── main.jsx              # React entry
     │   ├── App.jsx               # routes (see §11)
-    │   ├── apiClient.js          # single axios instance (JWT, error UX)
-    │   ├── auth.js               # session helpers (localStorage)
+    │   ├── apiClient.js          # single axios instance (cookie auth, error UX)
+    │   ├── auth.js               # session helpers (httpOnly cookie + localStorage mirror)
+    │   ├── urls.js               # safeExternalUrl() — https-only link validation
     │   ├── api.jsx               # typed API call wrappers
     │   ├── Login.jsx / Signup.jsx / ForgotPassword.jsx / Logout.jsx
     │   ├── TexttoImage.jsx / RemoveBg.jsx / TextSummarizer.jsx
@@ -260,7 +265,12 @@ configured, password-reset codes are printed on the **backend console**.
 | `JWT_EXPIRES_IN` | optional | Token lifetime, default `7d` |
 | `NODE_ENV` | ✅ prod | `production` on Vercel |
 | `TRUST_PROXY` | ✅ Vercel | `1` (one proxy hop) so rate limiting sees real client IPs |
-| `CORS_ORIGINS` | ✅ prod | Comma-separated allow-list; supports host wildcards, e.g. `https://*.your-team.vercel.app` |
+| `CORS_ORIGINS` | ✅ prod | Comma-separated allow-list; supports host wildcards, e.g. `https://*.your-team.vercel.app` (wildcards also need `CORS_ALLOW_WILDCARD=true`) |
+| `CORS_ALLOW_WILDCARD` | ⚠️ prod | `true` opt-in gate for `*` host patterns — bare `*` origins are always rejected |
+| `COOKIE_SECURE` / `COOKIE_SAMESITE` / `COOKIE_MAX_AGE_DAYS` | optional | Session cookie flags (prod defaults: `secure` on, `SameSite=None`, 7 days) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | ⚠️ prod | Upstash Redis REST credentials → shared, globally consistent rate-limit counters; without them the in-memory store is used (per instance) |
+| `RATE_LIMIT_*` | optional | `WINDOW_MS` (15 min), `GLOBAL` (300), `CREDENTIALS` (60), `CONTACT` (5), `AI_WINDOW_MS` (60 s), `AI` (20) |
+| `LOG_LEVEL` | optional | `debug` \| `info` \| `warn` \| `error` (default `info`) |
 | `APP_URL` | reset emails | Frontend origin used in reset links |
 | `ADMIN_EMAILS` | optional | Comma-separated emails that may read all usage analytics |
 | `RESET_TOKEN_TTL_MINUTES` | optional | Reset-code validity, default `30` |
@@ -315,7 +325,8 @@ used_at     TIMESTAMPTZ               expires_at   TIMESTAMPTZ
 
 Base URL (production): `https://fyp-ai-feature-kit-api.vercel.app`
 All responses are JSON: `{ "success": boolean, "message"?: string, … }`.
-Protected routes need `Authorization: Bearer <token>`.
+Protected routes need the **session cookie** (`afk_session`, sent
+automatically by the frontend) or `Authorization: Bearer <token>` for scripts.
 
 ### Health
 
@@ -328,10 +339,12 @@ Protected routes need `Authorization: Bearer <token>`.
 | Method | Path | Auth | Body | Success |
 |---|---|---|---|---|
 | POST | `/api/signup` | — | `{name, email, password}` | `201` + `userId` |
-| POST | `/api/login` | — | `{email, password}` | `200` + `token` (JWT, 7 d) |
-| GET | `/api/me` | ✅ | — | `200` + `{user:{id,name,email}}` |
+| POST | `/api/login` | — | `{email, password, remember?}` | `200` + `Set-Cookie: afk_session` (httpOnly JWT, 7 d). **No token in the body** — the cookie travels automatically |
+| POST | `/api/logout` | cookie | — | `200`, clears the cookie (safe to call when logged out) |
+| GET | `/api/me` | ✅ | — | `200` + `{user:{id,name,email,role,phone,location,bio,skills,linkedin,github}}` |
+| PATCH | `/api/profile` | ✅ | `{name?, role?, phone?, location?, bio?, skills?, linkedin?, github?}` | `200` + `{user}` — unknown keys are rejected (400), URLs must be `https://` |
 | POST | `/api/forgot-password` | — | `{email}` | `200` **always** (no user enumeration); if the account exists, a code is emailed (or printed on the server console in dev) |
-| POST | `/api/reset-password` | — | `{token, newPassword}` | `200`; the code is single-use and expires after 30 min |
+| POST | `/api/reset-password` | — | `{token, newPassword}` | `200`; single-use, expires after 30 min, and **revokes every existing session** (`token_version++`) |
 
 **Validation rules (server-side):** name ≤ 100 chars · email ≤ 254 chars and
 well-formed · password 8–128 chars with at least one letter and one digit.
@@ -340,16 +353,17 @@ well-formed · password 8–128 chars with at least one letter and one digit.
 
 | Method | Path | Auth | Body / Behaviour |
 |---|---|---|---|
-| POST | `/api/feature-usage` | ✅ | `{feature}` — user id comes from the **token**, never the body |
-| GET | `/api/feature-usage` | ✅ | Own usage rows; admins (`ADMIN_EMAILS`) get **all** rows joined with user name/email |
-| POST | `/api/contact` | — | `{name, email, message}` (message ≤ 5000 chars) |
+| POST | `/api/feature-usage` | ✅ | `{feature}` — user id comes from the **session**, never the body |
+| GET | `/api/feature-usage` | ✅ | Own usage rows (paginated: `limit` ≤ 100, `offset`); admins (`ADMIN_EMAILS`) get **all** rows joined with user name/email (`scope: "all"`) |
+| GET | `/api/admin/contact-messages` | ✅ admin | Paginated inbox of contact submissions |
+| POST | `/api/contact` | — | `{name, email, message}` (message ≤ 5000 chars) — 5 / 15 min per IP **and** email |
 
 ### AI proxies (keys stay on the server)
 
 | Method | Path | Auth | Body | Returns |
 |---|---|---|---|---|
 | POST | `/api/ai/text-to-image` | ✅ | `{prompt}` (≤ 2000 chars) | `{image: "<base64 PNG>"}` (Stability AI) |
-| POST | `/api/ai/remove-bg` | ✅ | `{imageBase64}` (≤ ~20 MB) | `{image: "<base64 PNG>"}` (remove.bg) |
+| POST | `/api/ai/remove-bg` | ✅ | `{imageBase64}` (≤ 3 MB — `express.json` is 1 MB globally, 25 MB only on this route; Vercel's ~4.5 MB body cap is the real ceiling) | `{image: "<base64 PNG>"}` (remove.bg) |
 | POST | `/api/ai/summarize` | ✅ | `{text}` (≤ 20 000 chars) | `{summary}` (Hugging Face BART) |
 
 ### Errors
@@ -358,16 +372,18 @@ well-formed · password 8–128 chars with at least one letter and one digit.
 |---|---|
 | 400 | Validation failed / invalid reset code / bad JSON |
 | 401 | Missing or invalid token; wrong email/password |
-| 403 | Authenticated but not allowed (reserved for future roles) |
+| 403 | Authenticated but not admin (e.g. `/api/admin/contact-messages`) |
 | 404 | Unknown `/api/*` route |
 | 409 | Email already registered (unique violation) |
 | 413 | Body too large |
 | 429 | Rate limited — "Too many attempts…" |
 | 500 | Unexpected server error |
 
-**Rate limits:** 300 requests / 15 min per IP for all of `/api` · **60 / 15 min**
-for signup, login, forgot- and reset-password · 20 / 15 min for contact ·
-20 / min for AI endpoints.
+**Rate limits** (all overridable via `RATE_LIMIT_*`): 300 requests / 15 min per
+IP for all of `/api` · **60 / 15 min** for signup, login, forgot- and
+reset-password · **5 / 15 min for contact** (per IP + email) · 20 / min for AI
+endpoints. Counters live in Upstash Redis when `UPSTASH_REDIS_REST_URL` +
+`UPSTASH_REDIS_REST_TOKEN` are set, otherwise in process memory.
 
 ---
 
@@ -377,12 +393,27 @@ for signup, login, forgot- and reset-password · 20 / 15 min for contact ·
 
 ```
 Signup:  password ──bcrypt(10 rounds)──▶ users.password (hash only)
-Login:   password ──verify bcrypt──▶ JWT { id, email } ──▶ Authorization header
-Every protected route: requireAuth ──verify JWT (server secret)──▶ next()
+Login:   password ──verify bcrypt──▶ JWT { id, email, ver } ──▶ Set-Cookie
+         afk_session (httpOnly, SameSite, Secure in prod) — no token in JSON
+Every protected route: requireAuth
+         ├─ verify JWT (server secret)
+         ├─ check users.token_version === ver  (session revoked on reset)
+         └─ next()
+Logout:  POST /api/logout ──▶ clears the cookie
 ```
 
-- The JWT secret exists **only** on the server; the frontend merely stores the
-  token and attaches it to requests.
+- The JWT secret exists **only** on the server, and the browser never touches
+  the token: it lives in an **httpOnly cookie**, so XSS cannot read it.
+  Non-browser clients may still pass the same token as
+  `Authorization: Bearer <token>` (handy for curl/Postman).
+- **Session revocation:** every login carries the user's `token_version`.
+  `POST /api/reset-password` increments it, which immediately invalidates
+  every token issued before the reset (a stolen session dies with the old
+  password).
+- `requireAuth` deliberately **fails open only when the database is
+  unreachable** (logs a warning and checks the signature alone) so an
+  outage does not take down read-mostly routes; wrong/absent version still
+  returns 401.
 - Login timing is equalised for unknown emails (a dummy bcrypt compare runs) so
   attackers can't detect which emails exist.
 - **Legacy plain-text rows** (from the pre-security version of the app) are
@@ -403,6 +434,7 @@ Every protected route: requireAuth ──verify JWT (server secret)──▶ nex
    → atomic UPDATE … WHERE used_at IS NULL AND expires_at > NOW()
      (two parallel requests can only win once → strictly single-use)
    → new bcrypt password saved, code marked used
+   → users.token_version += 1  ⇒ every already-issued session becomes invalid
 ```
 
 ### Security layers
@@ -410,13 +442,15 @@ Every protected route: requireAuth ──verify JWT (server secret)──▶ nex
 | Layer | Implementation |
 |---|---|
 | Password storage | bcrypt, 10 rounds, never reversible |
-| Sessions | HMAC JWT, 7-day expiry, server-side secret |
+| Sessions | HMAC JWT in an **httpOnly** `afk_session` cookie, 7-day expiry, `ver` claim checked against `users.token_version` (revocable) |
 | API keys | Only in backend env; browser only ever sees our `/api/ai/*` proxy |
-| Input validation | Central `validators.js` on every route (lengths, types, feature allow-list) |
+| Input validation | Central `validators.js` on every route (lengths, types, feature allow-list, profile field allow-list, 3 MB image cap) |
 | SQL injection | Parameterised queries everywhere (`$1, $2…`) |
 | Security headers | helmet (CSP off — JSON API; COEP/CORP/Referrer-Policy/HSTS…) |
-| CORS | Strict allow-list with wildcard support; unknown origins get **no** CORS headers |
-| Rate limiting | Global + per-group limiters keyed by real client IP (`TRUST_PROXY`) |
+| CORS | Strict allow-list with credential support; unknown origins get **no** CORS headers, bare `*` is rejected |
+| Rate limiting | Global + per-group limiters keyed by real client IP (`TRUST_PROXY`), Upstash-backed store when configured, `ipKeyGenerator` keeps hashed-IP behaviour correct |
+| Request bodies | 1 MB global JSON cap; 25 MB only on `/api/ai/remove-bg` (smoke-tested 413) |
+| Log hygiene | Structured JSON logger (`LOG_LEVEL`); no secrets or tokens are ever logged |
 | Error handling | Central JSON error handler; no stack traces leak to clients |
 | Secrets in git | `.env` git-ignored; `.env.example` has empty placeholders only |
 
@@ -428,29 +462,39 @@ Every protected route: requireAuth ──verify JWT (server secret)──▶ nex
 
 | Route | Page | Auth needed |
 |---|---|---|
-| `/`, `/home` | Landing page | — |
+| `/` | Landing page | — |
+| `/home` | Redirects to `/` (the old URL still works for shared links) | — |
 | `/features` | Feature grid | — |
 | `/login`, `/signup`, `/forgot-password`, `/reset-password` | Auth pages | — |
-| `/text-to-image`, `/background-removal`, `/text-summarizer`, `/text-to-speech`, `/voice-changer` | AI tools | ✅ |
-| `/profile` | Profile + logout | ✅ |
-| `/history` | Usage history | ✅ |
+| `/text-to-image`, `/background-removal`, `/text-summarizer`, `/text-to-speech`, `/voice-changer` | AI tools (each page redirects guests to `/login` itself) | ✅ |
+| `/profile` | Profile editor (PATCH `/api/profile`) | ✅ (`ProtectedRoute`) |
+| `/history` | Real usage history from `GET /api/feature-usage` | ✅ (`ProtectedRoute`) |
 | `/about`, `/contact`, `/terms`, `/terms-of-service`, `/privacypolicy` | Static pages | — |
+| `*` | Anything else → redirect to `/` (there is no 404 page) | — |
 
 ### Key modules
 
 - **`apiClient.js`** — the single axios instance:
   - base URL = `VITE_API_URL` (or `/api` via the dev proxy); a missing `/api`
     suffix is appended automatically
-  - attaches `Authorization: Bearer` from the stored token
-  - on `401` (except login/signup/reset attempts) clears the session and
-    redirects to `/login`
+  - sends the session cookie automatically (`withCredentials: true`); there is
+    **no token in JavaScript memory**
+  - on `401` (except login/signup/reset attempts) clears the local session and
+    redirects to `/login`; calls can opt out with `skipAuthRedirect`
   - when the request never reaches the server, replaces the empty error with an
     actionable message (check connection / VPN / proxy)
-- **`auth.js`** — `getToken / saveSession / clearSession` (localStorage). This
-  flag only drives the UI; the server enforces real auth.
+- **`auth.js`** — `getUser / setSession / updateUser / clearSession /
+  isLoggedIn`. The `isLoggedIn` flag only drives the UI; the server enforces
+  real auth. `main.jsx` re-verifies the session on boot via `GET /api/me` and
+  re-dispatches `auth:changed` so every tab (and the Navbar) stay in sync.
+- **`urls.js`** — `safeExternalUrl()` keeps only `https://` links; Profile
+  rejects anything else before rendering LinkedIn/GitHub icons.
 - **`api.jsx`** — small wrappers (`login()`, `signup()`, `generateImage()`,
   `removeBackground()`, `summarize()`, `logFeature()`, …) so components never
   hand-write URLs.
+- **`App.jsx`** — every page is `React.lazy` + `<Suspense>` (the Voice Changer
+  bundle alone is ~250 kB), `/profile` and `/history` sit behind
+  `<ProtectedRoute>`.
 
 ### Dev proxy
 
@@ -467,16 +511,36 @@ npm test          # from the repository root
 
 Runs two suites:
 
-1. **Unit tests** (Node's built-in `node --test`, no framework) — 22 tests:
-   - `validators.test.js` — signup/login/feature/message rules
-   - `auth.test.js` — JWT sign/verify and middleware behaviour
+1. **Unit tests** (Node's built-in `node --test`, no framework) — 28 tests:
+   - `validators.test.js` — signup/login/feature/message rules, image cap,
+     profile field allow-list + URL validation
+   - `auth.test.js` — JWT sign/verify, `ver` claim, and middleware behaviour
    - `passwords.test.js` — bcrypt hashing + legacy plain-text upgrade
-   - `cors.test.js` — origin matcher incl. wildcard sub-domains
+   - `cors.test.js` — origin matcher incl. wildcard sub-domains and the
+     `CORS_ALLOW_WILDCARD` gate
 2. **API smoke suite** (`api.smoke.mjs`) — boots the real server on port 5099
-   and drives 18 live checks: health, auth guards, validation, reset-code
-   semantics, CORS preflight (`OPTIONS → 204` + allow-headers), security
-   headers, 404s and rate limiting. Database-backed checks accept 500 when no
-   local PostgreSQL is running, so the suite is hermetic.
+   and drives 23 live checks: health, auth guards, validation, reset-code
+   semantics + **session revocation**, CORS preflight (`OPTIONS → 204` +
+   allow-credentials), security headers, 404s, **413 body-limit**, **admin
+   403**, cookie attributes and rate limiting. Database-backed checks accept
+   500 when no local PostgreSQL is running, so the suite stays hermetic; set
+   `SMOKE_REQUIRE_DB=true` (as CI does) to fail hard instead.
+
+```bash
+# from backend/
+npm test           # unit only
+npm run test:api   # API smoke only
+npm run test:all   # both
+
+# with a real database (required for the full smoke path)
+DB_HOST=… DB_PORT=… DB_USER=… DB_NAME=… DB_PASSWORD=… SMOKE_REQUIRE_DB=true npm run test:all
+```
+
+CI runs this on every push/PR (`.github/workflows/ci.yml`): the backend job
+spins up a Postgres 16 service container and runs `npm run test:all` with
+`SMOKE_REQUIRE_DB=true` (so a broken migration fails the build instead of
+quietly accepting 500s), then `npm audit --omit=dev --audit-level=high`; the
+frontend job runs `npm run lint`, `npm run build` and a full `npm audit`.
 
 ---
 
@@ -507,7 +571,9 @@ The app runs as **two Vercel projects** built from this one repository.
 
 1. Import the repo again → **Root Directory: `frontend`** (Vite auto-detected).
 2. Env: `VITE_API_URL=https://<backend-project>.vercel.app/api`.
-3. Deploy → the SPA calls the API with bearer tokens.
+3. Deploy → the SPA calls the API with the httpOnly session cookie
+   (`withCredentials`), so `CORS_ORIGINS` must list this exact frontend origin
+   and the backend must set `COOKIE_SECURE=true` + `SameSite=None`.
 
 ### 13.4 Current production values
 
@@ -571,10 +637,12 @@ slower and returns 500 — check the function logs for `Schema init failed`.
 
 ## 15. Known Limitations
 
-- **Vercel payload limit ≈ 4.5 MB** per request/response — very large images
-  through *Remove Background* can fail on the free tier.
-- **Rate-limit state is per serverless instance** (in-memory). Fine for a demo
-  and light abuse; a shared store (e.g. Upstash Redis) would make it global.
+- **Vercel payload limit ≈ 4.5 MB** per request/response — the image cap is 3
+  MB (`LIMITS.imageBase64`) and the remove-bg route allows 25 MB JSON, but
+  anything over ~4.5 MB never reaches the function.
+- **Rate-limit state without Upstash** is per serverless instance (in-memory).
+  Set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` for counters that
+  survive cold starts and cover every instance.
 - **Password-reset emails need SMTP** (Gmail app password or similar). Without
   them, codes only appear in server logs — acceptable for a viva, not for real
   users.
@@ -582,19 +650,20 @@ slower and returns 500 — check the function logs for `Schema init failed`.
   allow-list rather than a role column in the database.
 - Voice Changer/Text-to-Speech depend on **browser APIs** (mic permission,
   Web Speech support), so behaviour differs across browsers.
+- **No sitemap** — it needs the final production domain (absolute URLs).
 
 ---
 
 ## 16. Future Improvements
 
-- Refresh tokens / logout-all, plus per-session management
-- Email verification and password-change (while logged in)
-- Upstash Redis for globally consistent rate limiting and cached AI responses
+- Email verification and password-change while logged in
+- Per-session management (list/revoke active devices)
+- Upstash-backed cache for AI responses (the rate-limit store is already wired)
 - Move AI jobs to background/queue processing to lift the 4.5 MB payload cap
 - Admin dashboard UI (usage graphs per feature/user)
 - Database roles instead of `ADMIN_EMAILS` env for analytics access
 - OpenAPI/Swagger spec generated from the route definitions
-- CI (GitHub Actions) running `npm test` + frontend build on every push
+- XML sitemap once the production domain is final
 
 ---
 
