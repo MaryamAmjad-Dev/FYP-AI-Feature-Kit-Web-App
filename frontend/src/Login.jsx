@@ -22,14 +22,14 @@ const Login = () => {
       const res = await apiClient.post("/login", {
         email,
         password,
+        rememberMe,
       });
 
-      if (res.data.success && res.data.token) {
-        setSession(res.data.token, res.data.user);
-        if (rememberMe) {
-          localStorage.setItem("rememberMe", "true");
-        }
-        navigate("/home");
+      if (res.data.success && res.data.user) {
+        // The JWT is set as an httpOnly cookie by the server; only the
+        // non-sensitive user object is kept in the browser.
+        setSession(res.data.user, { remember: rememberMe });
+        navigate("/");
       } else {
         setError(res.data.message || "Login failed!");
       }

@@ -1,18 +1,28 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import apiClient from './apiClient';
 import { clearSession } from './auth';
 
 export default function Logout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Clear only our session data (never a blind localStorage.clear())
-    clearSession();
-    sessionStorage.clear();
-    // Redirect to login after a short delay
-    setTimeout(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Clears the httpOnly session cookie server-side.
+        await apiClient.post('/logout');
+      } catch {
+        /* offline or already cleared — carry on with the local cleanup */
+      }
+      if (cancelled) return;
+      // Clear only our session data (never a blind localStorage.clear())
+      clearSession();
       navigate('/login');
-    }, 1200);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   return (

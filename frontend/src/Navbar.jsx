@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaUser, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, isLoggedIn } from './auth';
+import apiClient from './apiClient';
 
 const Navbar = () => {
   const [isLoggedInState, setIsLoggedInState] = useState(false);
@@ -13,9 +14,19 @@ const Navbar = () => {
 
   useEffect(() => {
     setIsLoggedInState(isLoggedIn());
+    // Fired after the boot-time /me check resolves (cookie may have expired).
+    const sync = () => setIsLoggedInState(isLoggedIn());
+    window.addEventListener('auth:changed', sync);
+    return () => window.removeEventListener('auth:changed', sync);
   }, [location]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Ask the server to drop the httpOnly session cookie, then tidy the UI.
+    try {
+      await apiClient.post('/logout');
+    } catch {
+      /* already signed out / offline — the local flag still gets cleared */
+    }
     clearSession();
     setIsLoggedInState(false);
     setIsDropdownOpen(false);
@@ -36,7 +47,7 @@ const Navbar = () => {
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {['/home', '/features', '/about', '/contact'].map((path, idx) => (
+              {['/', '/features', '/about', '/contact'].map((path, idx) => (
               <Link
                 key={idx}
                 to={path}
@@ -46,7 +57,7 @@ const Navbar = () => {
                     : 'text-white hover:text-purple-300 hover:border-b-2 hover:border-purple-300'
                 } transition duration-300`}
               >
-                {path === '/home'
+                {path === '/'
                   ? 'Home'
                   : path === '/features'
                   ? 'Features'
@@ -138,7 +149,7 @@ const Navbar = () => {
             className="md:hidden bg-white/10 backdrop-blur-xl border-t border-white/20"
           >
             <div className="px-4 pt-4 pb-6 space-y-2">
-              {['/home', '/features', '/about', '/contact'].map((path, idx) => (
+            {['/', '/features', '/about', '/contact'].map((path, idx) => (
                 <Link
                   key={idx}
                   to={path}
@@ -147,7 +158,7 @@ const Navbar = () => {
                   }`}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  {path === '/home'
+                  {path === '/'
                     ? 'Home'
                     : path === '/features'
                     ? 'Features'

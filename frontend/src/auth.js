@@ -1,67 +1,85 @@
 /**
  * Session helpers.
  *
- * The real authentication happens on the server (JWT verified by middleware);
- * these helpers only decide what the UI should show. Forging `loggedIn` in
- * DevTools can no longer unlock protected actions because every API call
- * carries the token and the backend rejects missing/invalid ones with a 401.
+ * The JWT itself lives in an httpOnly cookie set by the server, so page
+ * JavaScript can never read it (an XSS cannot steal the session the way it
+ * could when the token sat in localStorage). These helpers only remember
+ * what the UI should show — the server still rejects every request whose
+ * cookie is missing, expired or revoked (401).
+ *
+ * "Remember me" decides where the UI flag lives: localStorage survives a
+ * browser restart, sessionStorage does not — matching the session cookie the
+ * server sets when the box is left unticked.
  */
 
-const TOKEN_KEY = 'authToken';
+const TOKEN_KEY = 'authToken'; // legacy key from when the JWT was stored here
 const USER_KEY = 'userData';
 const LOGGED_IN_KEY = 'loggedIn';
 
-export function getToken() {
+function safeGet(store, key) {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return store.getItem(key);
   } catch {
     return null;
   }
 }
 
-export function setSession(token, user) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user || {}));
-  localStorage.setItem(LOGGED_IN_KEY, 'true');
+function safeSet(store, key, value) {
+  try {
+    store.setItem(key, value);
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function safeRemove(store, key) {
+  try {
+    store.removeItem(key);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** The store that currently holds the session (localStorage wins). */
+function activeStore() {
+  if (safeGet(localStorage, LOGGED_IN_KEY) || safeGet(localStorage, USER_KEY)) return localStorage;
+  if (safeGet(sessionStorage, LOGGED_IN_KEY) || safeGet(sessionStorage, USER_KEY)) {
+    return sessionStorage;
+  }
+  return localStorage;
+}
+
+export function setSession(user, { remember = true } = {}) {
+  const target = remember ? localStorage : sessionStorage;
+  const other = remember ? sessionStorage : localStorage;
+  safeRemove(other, USER_KEY);
+  safeRemove(other, LOGGED_IN_KEY);
+  // Drop the token that older builds kept in localStorage.
+  safeRemove(localStorage, TOKEN_KEY);
+  safeRemove(sessionStorage, TOKEN_KEY);
+  safeSet(target, USER_KEY, JSON.stringify(user || {}));
+  safeSet(target, LOGGED_IN_KEY, 'true');
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(LOGGED_IN_KEY);
-  localStorage.removeItem('rememberMe');
-}
-
-function decodeTokenPayload(token) {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    return JSON.parse(atob(padded));
-  } catch {
-    return null;
+  for (const store of [localStorage, sessionStorage]) {
+    safeRemove(store, TOKEN_KEY);
+    safeRemove(store, USER_KEY);
+    safeRemove(store, LOGGED_IN_KEY);
+    safeRemove(store, 'rememberMe');
   }
 }
 
-export function isTokenExpired(token) {
-  const payload = decodeTokenPayload(token);
-  if (!payload || typeof payload.exp !== 'number') return true;
-  return payload.exp * 1000 <= Date.now();
-}
-
-/** True only when a non-expired JWT is present. */
+/** True only while the UI still believes there is a session. */
 export function isLoggedIn() {
-  const token = getToken();
-  if (!token) return false;
-  if (isTokenExpired(token)) {
-    clearSession();
-    return false;
-  }
-  return true;
+  return (
+    safeGet(activeStore(), LOGGED_IN_KEY) === 'true' && Boolean(safeGet(activeStore(), USER_KEY))
+  );
 }
 
 export function getUser() {
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = safeGet(activeStore(), USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -75,6 +93,6 @@ export function getUserId() {
 
 export function updateUser(patch) {
   const user = { ...(getUser() || {}), ...patch };
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  safeSet(activeStore(), USER_KEY, JSON.stringify(user));
   return user;
 }

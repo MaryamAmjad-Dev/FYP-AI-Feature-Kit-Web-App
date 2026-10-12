@@ -7,12 +7,32 @@ import {
   FaMapMarkerAlt,
   FaLinkedin,
   FaGithub,
-  FaLock,
 } from 'react-icons/fa';
+import apiClient from './apiClient';
+import { extractErrorMessage } from './api';
 import { getUser, updateUser } from './auth';
+import { safeExternalUrl } from './urls';
+
+const EMPTY = {
+  name: '',
+  email: '',
+  role: '',
+  phone: '',
+  location: '',
+  bio: '',
+  skills: [],
+  linkedin: '',
+  github: '',
+};
+
+const toProfileState = (user) => ({
+  ...EMPTY,
+  ...(user || {}),
+  skills: Array.isArray(user?.skills) ? user.skills : [],
+});
 
 const Profile = () => {
-  const [userData, setUserData] = useState({ name: '', email: '', role: '', phone: '', location: '', bio: '', skills: [], linkedin: '', github: '' });
+  const [userData, setUserData] = useState(toProfileState(getUser()));
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -20,28 +40,85 @@ const Profile = () => {
   const [location, setLocation] = useState('');
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState('');
+
+  const applyUser = (user) => {
+    const state = toProfileState(user);
+    setUserData(state);
+    setName(state.name);
+    setRole(state.role);
+    setPhone(state.phone);
+    setLocation(state.location);
+    setBio(state.bio);
+    setSkills(state.skills.join(', '));
+    updateUser(user);
+    return state;
+  };
 
   useEffect(() => {
-    const stored = getUser();
-    if (stored) {
-      setUserData((prev) => ({ ...prev, ...stored }));
-      setName(stored.name || '');
-      setRole(stored.role || '');
-      setPhone(stored.phone || '');
-      setLocation(stored.location || '');
-      setBio(stored.bio || '');
-      setSkills((stored.skills && stored.skills.join) ? stored.skills.join(', ') : '');
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        // Refresh from the server so the editor starts from persisted data,
+        // not from whatever happens to be in localStorage.
+        const res = await apiClient.get('/me');
+        if (!cancelled && res.data?.user) applyUser(res.data.user);
+      } catch (err) {
+        // Session problems are handled by the apiClient interceptor; keep
+        // whatever we already had and let the user edit that.
+        if (!cancelled && err?.response?.status && err.response.status !== 401) {
+          setError(await extractErrorMessage(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleEdit = () => setEditing(true);
-  const handleSave = () => {
-    const updatedSkills = skills.split(',').map(s => s.trim()).filter(Boolean);
-    const updatedUser = { ...userData, name, role, phone, location, bio, skills: updatedSkills };
-    setUserData(updatedUser);
-    updateUser({ name, role, phone, location, bio, skills: updatedSkills });
-    setEditing(false);
+  const handleEdit = () => {
+    setError('');
+    setSaved('');
+    setEditing(true);
   };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setError('');
+    applyUser(userData);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setSaved('');
+    try {
+      const res = await apiClient.patch('/profile', {
+        name,
+        role,
+        phone,
+        location,
+        bio,
+        skills: skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+        linkedin: userData.linkedin || '',
+        github: userData.github || '',
+      });
+      if (res.data?.user) {
+        applyUser(res.data.user);
+        setSaved('Profile saved.');
+        setEditing(false);
+      }
+    } catch (err) {
+      setError(await extractErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const linkedin = safeExternalUrl(userData.linkedin);
+  const github = safeExternalUrl(userData.github);
 
   return (
     <div className="min-h-screen py-10 px-4 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white flex items-center justify-center">
@@ -59,9 +136,10 @@ const Profile = () => {
           <div className="text-center md:text-left space-y-2">
             {editing ? (
               <input
+                aria-label="Name"
                 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text text-center md:text-left w-full bg-white/10 p-2 rounded"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
               />
             ) : (
               <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
@@ -70,24 +148,50 @@ const Profile = () => {
             )}
             {editing ? (
               <input
+                aria-label="Role"
                 className="text-lg text-white/90 w-full bg-white/10 p-2 rounded"
                 value={role}
-                onChange={e => setRole(e.target.value)}
+                onChange={(e) => setRole(e.target.value)}
                 placeholder="Role"
               />
             ) : (
               <p className="text-lg text-white/90">{userData.role}</p>
             )}
-            <div className="flex justify-center md:justify-start gap-4 pt-2">
-              <a href={userData.linkedin} target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
-                <FaLinkedin size={24} />
-              </a>
-              <a href={userData.github} target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">
-                <FaGithub size={24} />
-              </a>
-            </div>
+            {(linkedin || github) && (
+              <div className="flex justify-center md:justify-start gap-4 pt-2">
+                {linkedin && (
+                  <a
+                    href={linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-blue-400"
+                    aria-label="LinkedIn profile"
+                  >
+                    <FaLinkedin size={24} />
+                  </a>
+                )}
+                {github && (
+                  <a
+                    href={github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-gray-300"
+                    aria-label="GitHub profile"
+                  >
+                    <FaGithub size={24} />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {error && (
+          <p className="text-red-300 text-sm" role="alert">
+            {error}
+          </p>
+        )}
+        {saved && <p className="text-green-300 text-sm">{saved}</p>}
 
         {/* Contact Info */}
         <div className="space-y-4">
@@ -101,9 +205,10 @@ const Profile = () => {
               <FaPhone className="text-pink-400" />
               {editing ? (
                 <input
+                  aria-label="Phone"
                   className="bg-white/10 p-1 rounded text-white w-full"
                   value={phone}
-                  onChange={e => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(e.target.value)}
                   placeholder="Phone"
                 />
               ) : (
@@ -114,9 +219,10 @@ const Profile = () => {
               <FaMapMarkerAlt className="text-pink-400" />
               {editing ? (
                 <input
+                  aria-label="Location"
                   className="bg-white/10 p-1 rounded text-white w-full"
                   value={location}
-                  onChange={e => setLocation(e.target.value)}
+                  onChange={(e) => setLocation(e.target.value)}
                   placeholder="Location"
                 />
               ) : (
@@ -132,9 +238,10 @@ const Profile = () => {
             <h2 className="text-2xl font-semibold mb-2 text-white/90">About</h2>
             {editing ? (
               <textarea
+                aria-label="About"
                 className="bg-white/10 p-2 rounded text-white w-full"
                 value={bio}
-                onChange={e => setBio(e.target.value)}
+                onChange={(e) => setBio(e.target.value)}
                 placeholder="Bio"
               />
             ) : (
@@ -142,43 +249,58 @@ const Profile = () => {
             )}
           </div>
           <div>
-            <h3 className="text-xl font-semibold mb-3">Skills</h3>
+            <h3 className="text-xl font-semibold mb-3 text-white/90">Skills</h3>
             {editing ? (
               <input
+                aria-label="Skills"
                 className="bg-white/10 p-2 rounded text-white w-full"
                 value={skills}
-                onChange={e => setSkills(e.target.value)}
+                onChange={(e) => setSkills(e.target.value)}
                 placeholder="Skills (comma separated)"
               />
-            ) : (
+            ) : userData.skills.length ? (
               <div className="flex flex-wrap gap-3">
-                {userData.skills.map((skill, i) => (
+                {userData.skills.map((skill) => (
                   <motion.span
                     key={skill}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + i * 0.1 }}
                     className="px-4 py-1 text-sm border border-white/20 bg-purple-600/60 rounded-full"
                   >
                     {skill}
                   </motion.span>
                 ))}
               </div>
+            ) : (
+              <p className="text-white/60">No skills added yet.</p>
             )}
           </div>
         </div>
 
         {/* Edit/Save Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
           {editing ? (
-            <button
-              onClick={handleSave}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition-all"
-            >
-              Save
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                className="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-6 rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-bold py-2 px-6 rounded-lg transition-all"
+              >
+                {saving ? 'Saving…' : 'Save Profile'}
+              </button>
+            </>
           ) : (
             <button
+              type="button"
               onClick={handleEdit}
               className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition-all"
             >
@@ -186,8 +308,6 @@ const Profile = () => {
             </button>
           )}
         </div>
-
-        
       </motion.div>
     </div>
   );
