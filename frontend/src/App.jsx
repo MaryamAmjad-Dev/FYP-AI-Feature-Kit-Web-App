@@ -1,46 +1,30 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
-import Navbar from './Navbar';
-import Footer from './Footer';
-import { isLoggedIn } from './auth';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import ProtectedRoute from './components/ProtectedRoute';
+import PageFallback from './components/PageFallback';
 
 // Route-level code splitting: only the landing page (plus the always-visible
 // chrome) is needed up front; every other page is its own chunk.
-const Home = lazy(() => import('./Home'));
-const Features = lazy(() => import('./Features'));
-const TexttoImage = lazy(() => import('./TexttoImage'));
-const RemoveBg = lazy(() => import('./RemoveBg'));
-const VoiceChanger = lazy(() => import('./VoiceChanger'));
-const TexttoSpeech = lazy(() => import('./TexttoSpeech'));
-const Login = lazy(() => import('./Login'));
-const Signup = lazy(() => import('./Signup'));
-const Terms = lazy(() => import('./Terms'));
-const TermsOfService = lazy(() => import('./TermsOfService'));
-const ForgotPassword = lazy(() => import('./ForgotPassword'));
-const Profile = lazy(() => import('./Profile'));
-const PrivacyPolicy = lazy(() => import('./PrivacyPolicy'));
-const About = lazy(() => import('./About'));
-const Contact = lazy(() => import('./Contact'));
-const TextSummarizer = lazy(() => import('./TextSummarizer'));
-const History = lazy(() => import('./History'));
-
-/** Renders `children` only while a session exists; otherwise → /login. */
-function ProtectedRoute({ children }) {
-  const location = useLocation();
-  if (!isLoggedIn()) {
-    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
-  }
-  return children;
-}
-
-function PageFallback() {
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center text-white/80" role="status">
-      Loading…
-    </div>
-  );
-}
+const Home = lazy(() => import('./pages/Home'));
+const Features = lazy(() => import('./pages/Features'));
+const TexttoImage = lazy(() => import('./pages/TexttoImage'));
+const RemoveBg = lazy(() => import('./pages/RemoveBg'));
+const VoiceChanger = lazy(() => import('./pages/VoiceChanger'));
+const TexttoSpeech = lazy(() => import('./pages/TexttoSpeech'));
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const Terms = lazy(() => import('./pages/Terms'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const Profile = lazy(() => import('./pages/Profile'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const TextSummarizer = lazy(() => import('./pages/TextSummarizer'));
+const History = lazy(() => import('./pages/History'));
 
 const AppContent = () => {
   const location = useLocation();
@@ -55,10 +39,10 @@ const AppContent = () => {
             {/* Canonical home is "/"; keep the old link working. */}
             <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/features" element={<Features />} />
-            <Route path="/text-to-image" element={<TexttoImage />} />
-            <Route path="/background-removal" element={<RemoveBg />} />
-            <Route path="/voice-changer" element={<VoiceChanger />} />
-            <Route path="/text-to-speech" element={<TexttoSpeech />} />
+            <Route path="/text-to-image" element={<ProtectedRoute><TexttoImage /></ProtectedRoute>} />
+            <Route path="/background-removal" element={<ProtectedRoute><RemoveBg /></ProtectedRoute>} />
+            <Route path="/voice-changer" element={<ProtectedRoute><VoiceChanger /></ProtectedRoute>} />
+            <Route path="/text-to-speech" element={<ProtectedRoute><TexttoSpeech /></ProtectedRoute>} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/terms" element={<Terms />} />
@@ -84,7 +68,7 @@ const AppContent = () => {
             <Route path="/privacypolicy" element={<PrivacyPolicy />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/text-summarizer" element={<TextSummarizer />} />
+            <Route path="/text-summarizer" element={<ProtectedRoute><TextSummarizer /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

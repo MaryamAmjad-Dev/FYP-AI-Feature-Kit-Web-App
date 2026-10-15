@@ -50,14 +50,14 @@ const Features = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900  bg-[length:300%_300%] animate-gradient-x text-white p-6 md:p-12">
+    <div className="min-h-screen page-bg text-white p-6 md:p-12">
       <motion.div
         className="text-center mb-12"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
       >
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 gradient-title">
           Powerful AI Features
         </h1>
         <p className="text-lg md:text-xl text-white">

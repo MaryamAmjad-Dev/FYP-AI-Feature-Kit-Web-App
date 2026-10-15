@@ -13,7 +13,7 @@ const {
   validateName,
   validatePassword,
   validateSignup,
-} = require('../validators');
+} = require('../lib/validators');
 
 test('normalizeEmail lowercases and trims', () => {
   assert.equal(normalizeEmail('  User@Example.COM '), 'user@example.com');

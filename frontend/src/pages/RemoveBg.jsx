@@ -1,13 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaImage, FaSpinner, FaDownload, FaUpload } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
-import { extractErrorMessage, fileToBase64, logFeatureUsage, removeBackground } from './api';
-import { isLoggedIn } from './auth';
+import { FaImage, FaDownload, FaUpload } from 'react-icons/fa';
+import Spinner from '../components/ui/Spinner';
+import useSession from '../hooks/useSession';
+import { extractErrorMessage, fileToBase64, logFeatureUsage, removeBackground } from '../lib/api';
 
 export default function RemoveBg() {
-  const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
+  const isLoggedInState = useSession();
 
   const [file, setFile] = useState(null);
   const [outputUrl, setOutputUrl] = useState('');
@@ -19,14 +18,6 @@ export default function RemoveBg() {
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
   const imageRef = useRef(null);
   const objectUrlsRef = useRef({ preview: '', output: '' });
-
-  useEffect(() => {
-    const loggedIn = isLoggedIn();
-    setIsLoggedInState(loggedIn);
-    if (!loggedIn) {
-      navigate('/login');
-    }
-  }, [navigate]);
 
   // Memory: release every blob URL this component created.
   useEffect(() => {
@@ -142,15 +133,15 @@ export default function RemoveBg() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-6">
+    <div className="min-h-screen flex items-center justify-center page-bg text-white p-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-3xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-10 md:p-12 shadow-2xl space-y-10"
+        className="w-full max-w-3xl glass-card border border-white/20 rounded-2xl p-10 md:p-12 shadow-2xl space-y-10"
       >
         <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-4xl font-bold gradient-title">
             Background Remover
           </h1>
           <p className="text-sm text-white mt-2">Remove image backgrounds instantly with AI precision</p>
@@ -161,7 +152,7 @@ export default function RemoveBg() {
           <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" id="image-upload" />
           <label
             htmlFor="image-upload"
-            className="cursor-pointer bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg transition-all"
+            className="cursor-pointer btn-primary text-white px-6 py-3 rounded-lg transition-all"
           >
             Choose Image
           </label>
@@ -211,12 +202,12 @@ export default function RemoveBg() {
             className={`w-full flex items-center justify-center gap-2 py-3 px-6 rounded-lg font-bold transition-all ${
               !file || loading
                 ? 'bg-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600'
+                : 'btn-primary'
             }`}
           >
             {loading ? (
               <>
-                <FaSpinner className="w-5 h-5 animate-spin" />
+                <Spinner />
                 Processing...
               </>
             ) : (

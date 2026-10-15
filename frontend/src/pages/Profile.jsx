@@ -8,10 +8,10 @@ import {
   FaLinkedin,
   FaGithub,
 } from 'react-icons/fa';
-import apiClient from './apiClient';
-import { extractErrorMessage } from './api';
-import { getUser, updateUser } from './auth';
-import { safeExternalUrl } from './urls';
+import apiClient from '../lib/apiClient';
+import { extractErrorMessage } from '../lib/api';
+import { getUser, updateUser } from '../lib/auth';
+import { safeExternalUrl } from '../lib/urls';
 
 const EMPTY = {
   name: '',
@@ -126,7 +126,7 @@ const Profile = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-5xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-6 md:p-10 space-y-10"
+        className="w-full max-w-5xl glass-card border border-white/20 rounded-3xl shadow-2xl p-6 md:p-10 space-y-10"
       >
         {/* Header */}
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
@@ -137,12 +137,12 @@ const Profile = () => {
             {editing ? (
               <input
                 aria-label="Name"
-                className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text text-center md:text-left w-full bg-white/10 p-2 rounded"
+                className="text-4xl font-bold gradient-title text-center md:text-left w-full bg-white/10 p-2 rounded"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             ) : (
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+              <h1 className="text-4xl font-bold gradient-title">
                 {userData.name}
               </h1>
             )}

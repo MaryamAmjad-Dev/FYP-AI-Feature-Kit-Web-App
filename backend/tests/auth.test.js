@@ -11,7 +11,7 @@ const {
   jwtSecret,
   signToken,
   verifyToken,
-} = require('../auth');
+} = require('../middleware/auth');
 
 const user = { id: 7, name: 'Ada', email: 'ada@example.com' };
 
@@ -71,9 +71,9 @@ test('reset tokens are random, hashable and format-checked', () => {
 test('isAdmin matches only configured emails', () => {
   process.env.ADMIN_EMAILS = 'Admin@Example.com, other@example.com';
   // config is cached at require time, so assert against the loaded list instead.
-  delete require.cache[require.resolve('../config')];
-  delete require.cache[require.resolve('../auth')];
-  const fresh = require('../auth');
+  delete require.cache[require.resolve('../config/config')];
+  delete require.cache[require.resolve('../middleware/auth')];
+  const fresh = require('../middleware/auth');
   assert.equal(fresh.isAdmin('admin@example.com'), true);
   assert.equal(fresh.isAdmin('someone-else@example.com'), false);
   assert.equal(fresh.isAdmin(undefined), false);

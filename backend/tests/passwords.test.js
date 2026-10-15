@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { BCRYPT_ROUNDS, compareAgainstDummy, hashPassword, verifyPassword } = require('../passwords');
+const { BCRYPT_ROUNDS, compareAgainstDummy, hashPassword, verifyPassword } = require('../lib/passwords');
 
 test('hashPassword produces a bcrypt hash, never the plain password', async () => {
   const hash = await hashPassword('secret123');

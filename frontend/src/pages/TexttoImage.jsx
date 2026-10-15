@@ -1,28 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { FaImage, FaSpinner, FaDownload } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { FaImage, FaDownload } from 'react-icons/fa';
+import Spinner from '../components/ui/Spinner';
+import useSession from '../hooks/useSession';
 
-import { extractErrorMessage, generateImage, logFeatureUsage } from './api';
-import { isLoggedIn } from './auth';
+import { extractErrorMessage, generateImage, logFeatureUsage } from '../lib/api';
 
 export default function TexttoImage() {
-  const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
+  const isLoggedInState = useSession();
 
   const [prompt, setPrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const imageUrlRef = useRef('');
-
-  useEffect(() => {
-    const loggedIn = isLoggedIn();
-    setIsLoggedInState(loggedIn);
-    if (!loggedIn) {
-      navigate('/login');
-    }
-  }, [navigate]);
 
   // Keep track of the generated blob URL so it can be released.
   useEffect(() => {
@@ -68,15 +59,15 @@ export default function TexttoImage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center page-bg text-white px-4 py-12">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-3xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-2xl space-y-8"
+        className="w-full max-w-3xl glass-card border border-white/20 rounded-2xl p-8 shadow-2xl space-y-8"
       >
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">Text to Image Generator</h1>
+          <h1 className="text-4xl font-bold gradient-title">Text to Image Generator</h1>
           <p className="text-sm text-white">Transform your imagination into stunning visuals with AI</p>
         </div>
 
@@ -96,12 +87,12 @@ export default function TexttoImage() {
             className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               loading || !prompt.trim()
                 ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600'
+                : 'btn-primary'
             }`}
           >
             {loading ? (
               <>
-                <FaSpinner className="w-5 h-5 animate-spin" />
+                <Spinner />
                 Generating...
               </>
             ) : (
@@ -115,7 +106,7 @@ export default function TexttoImage() {
 
         {loading && (
           <div className="flex flex-col items-center justify-center p-6 bg-white/10 border border-white/10 rounded-lg text-gray-300">
-            <FaSpinner className="w-8 h-8 animate-spin mb-2 text-pink-300" />
+            <Spinner className="w-8 h-8 mb-2 text-pink-300" />
             Creating your masterpiece...
           </div>
         )}

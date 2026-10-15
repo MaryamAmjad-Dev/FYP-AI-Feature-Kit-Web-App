@@ -68,7 +68,7 @@ function assert(condition, message) {
 async function seedSessionOwner() {
   let pool = null;
   try {
-    const { config } = require('../config');
+    const { config } = require('../config/config');
     const { Pool } = require('pg');
     const bcrypt = require('bcryptjs');
     pool = new Pool({

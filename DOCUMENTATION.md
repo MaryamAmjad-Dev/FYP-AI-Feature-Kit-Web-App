@@ -168,14 +168,24 @@ FYP-AI-Feature-Kit-Web-App/
 │
 ├── backend/
 │   ├── server.js                 # Express app (also exported for Vercel)
-│   ├── api/index.js              # Vercel serverless entry (wraps server.js)
+│   ├── api/
+│   │   └── index.js              # Vercel serverless entry (wraps server.js)
 │   ├── vercel.json               # /api/* rewrites
-│   ├── config.js                 # env → typed config + CORS matcher
-│   ├── db.js                     # pg Pool + schema bootstrap (idempotent)
-│   ├── auth.js                   # JWT sign/verify + requireAuth/requireAdmin
-│   ├── passwords.js              # bcrypt hash/verify + legacy upgrade
-│   ├── validators.js             # input rules (signup, login, features…)
-│   ├── mailer.js                 # reset-email sender (SMTP or console)
+│   ├── config/
+│   │   └── config.js             # env → typed config + CORS matcher
+│   ├── db/
+│   │   ├── db.js                 # pg Pool + schema bootstrap (idempotent)
+│   │   ├── schema.sql            # manual setup (psql -f schema.sql)
+│   │   └── Database Queries.sql  # reference queries
+│   ├── middleware/
+│   │   ├── auth.js               # JWT sign/verify + requireAuth/requireAdmin
+│   │   └── rateLimitStore.js     # shared rate-limit store (Upstash/Redis REST)
+│   ├── services/
+│   │   └── mailer.js             # reset-email sender (SMTP or console)
+│   ├── lib/
+│   │   ├── passwords.js          # bcrypt hash/verify + legacy upgrade
+│   │   ├── validators.js         # input rules (signup, login, features…)
+│   │   └── logger.js             # structured JSON logger
 │   ├── routes/
 │   │   ├── auth.routes.js        # signup, login, me, forgot/reset password
 │   │   ├── usage.routes.js       # feature-usage + contact
@@ -186,8 +196,6 @@ FYP-AI-Feature-Kit-Web-App/
 │   │   ├── passwords.test.js     # unit: bcrypt + legacy upgrade
 │   │   ├── cors.test.js          # unit: origin matcher (wildcards)
 │   │   └── api.smoke.mjs         # boots the real server, 18 live checks
-│   ├── schema.sql                # manual setup (psql -f schema.sql)
-│   ├── Database Queries.sql      # reference queries
 │   ├── .env.example              # template — copy to .env
 │   └── package.json
 │
@@ -195,18 +203,20 @@ FYP-AI-Feature-Kit-Web-App/
     ├── src/
     │   ├── main.jsx              # React entry
     │   ├── App.jsx               # routes (see §11)
-    │   ├── apiClient.js          # single axios instance (cookie auth, error UX)
-    │   ├── auth.js               # session helpers (httpOnly cookie + localStorage mirror)
-    │   ├── urls.js               # safeExternalUrl() — https-only link validation
-    │   ├── api.jsx               # typed API call wrappers
-    │   ├── Login.jsx / Signup.jsx / ForgotPassword.jsx / Logout.jsx
-    │   ├── TexttoImage.jsx / RemoveBg.jsx / TextSummarizer.jsx
-    │   ├── TexttoSpeech.jsx / VoiceChanger.jsx
-    │   ├── Home.jsx / Features.jsx / About.jsx / Contact.jsx
-    │   ├── Profile.jsx / History.jsx
-    │   ├── Terms.jsx / TermsOfService.jsx / PrivacyPolicy.jsx
-    │   ├── Navbar.jsx / Footer.jsx
-    │   └── styles/…              # Tailwind setup
+    │   ├── pages/                # route pages
+    │   │   ├── Home.jsx / Features.jsx / About.jsx / Contact.jsx
+    │   │   ├── Login.jsx / Signup.jsx / ForgotPassword.jsx
+    │   │   ├── TexttoImage.jsx / RemoveBg.jsx / TextSummarizer.jsx
+    │   │   ├── TexttoSpeech.jsx / VoiceChanger.jsx
+    │   │   ├── Profile.jsx / History.jsx
+    │   │   └── Terms.jsx / TermsOfService.jsx / PrivacyPolicy.jsx
+    │   ├── components/
+    │   │   ├── Navbar.jsx / Footer.jsx
+    │   ├── lib/
+    │   │   ├── apiClient.js      # single axios instance (cookie auth, error UX)
+    │   │   ├── auth.js           # session helpers (httpOnly cookie + storage mirror)
+    │   │   ├── urls.js           # safeExternalUrl() — https-only link validation
+    │   │   └── api.jsx           # typed API call wrappers
     ├── vite.config.js            # dev proxy /api → localhost:5000
     ├── .env.example              # VITE_API_URL template
     └── package.json
@@ -231,7 +241,7 @@ cd FYP-AI-Feature-Kit-Web-App
 
 # 2. Database — create an empty database (tables are auto-created on start)
 psql -U postgres -c "CREATE DATABASE webai;"
-# …or paste backend/schema.sql into the Neon SQL editor
+# …or paste backend/db/schema.sql into the Neon SQL editor
 
 # 3. Backend
 cd backend
@@ -287,7 +297,7 @@ configured, password-reset codes are printed on the **backend console**.
 
 ## 8. Database Schema
 
-Four tables (created automatically by `backend/db.js`, or via `schema.sql`):
+Four tables (created automatically by `backend/db/db.js`, or via `schema.sql`):
 
 ```sql
 users                     contact_messages
@@ -552,7 +562,7 @@ The app runs as **two Vercel projects** built from this one repository.
 
 1. Create a project at https://neon.tech (free tier is enough).
 2. Copy the **pooled** connection string (host contains `-pooler`).
-3. Run `backend/schema.sql` in the Neon SQL editor once (or let the API create
+3. Run `backend/db/schema.sql` in the Neon SQL editor once (or let the API create
    the tables on its first request), then set `SKIP_SCHEMA_INIT=true`.
 
 ### 13.2 Backend project

@@ -10,7 +10,7 @@
 // Zero new dependencies: the Upstash REST API is plain HTTP (INCR/PEXPIRE),
 // called with the global fetch.
 
-const logger = require('./logger');
+const logger = require('../lib/logger');
 
 class UpstashStore {
   constructor({ url, token, prefix = 'rl' }) {

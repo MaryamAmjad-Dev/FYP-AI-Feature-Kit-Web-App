@@ -10,7 +10,7 @@ const TermsOfService = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white overflow-y-auto px-6 py-10">
+    <div className="fixed inset-0 z-50 page-bg text-white overflow-y-auto px-6 py-10">
       <div className="max-w-4xl mx-auto relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl text-gray-200">
         {/* Close button */}
         <button

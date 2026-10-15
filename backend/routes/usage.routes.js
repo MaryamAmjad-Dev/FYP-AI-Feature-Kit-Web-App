@@ -1,10 +1,10 @@
 const express = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
-const { db } = require('../db');
-const { config } = require('../config');
-const { isAdmin, requireAdmin, requireAuth } = require('../auth');
-const logger = require('../logger');
+const { db } = require('../db/db');
+const { config } = require('../config/config');
+const { isAdmin, requireAdmin, requireAuth } = require('../middleware/auth');
+const logger = require('../lib/logger');
 const {
   asString,
   isKnownFeature,
@@ -12,7 +12,7 @@ const {
   normalizeEmail,
   validateMessage,
   validateName,
-} = require('../validators');
+} = require('../lib/validators');
 
 const router = express.Router();
 

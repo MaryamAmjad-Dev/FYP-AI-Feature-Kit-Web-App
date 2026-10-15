@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
-import apiClient from './apiClient';
+import apiClient from '../lib/apiClient';
 
 const Contact = () => {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
@@ -32,16 +32,16 @@ const Contact = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-6">
+    <div className="min-h-screen flex items-center justify-center page-bg text-white p-6">
       <Toaster position="top-center" />
       <motion.div
         initial={{ opacity: 0, y: -40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="w-full max-w-3xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-xl space-y-6"
+        className="w-full max-w-3xl glass-card border border-white/20 rounded-2xl p-8 shadow-xl space-y-6"
       >
         <div className="text-center">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-4xl md:text-5xl font-bold gradient-title">
             Contact Us
           </h1>
           <p className="text-sm text-white mt-2">We'd love to hear from you!</p>

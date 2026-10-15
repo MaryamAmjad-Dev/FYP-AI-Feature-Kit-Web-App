@@ -1,12 +1,12 @@
-const { config, isOriginAllowed } = require('./config');
+const { config, isOriginAllowed } = require('./config/config');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { rateLimit } = require('express-rate-limit');
 
-const { initSchema, closePool } = require('./db');
-const { createSharedStore } = require('./rateLimitStore');
-const logger = require('./logger');
+const { initSchema, closePool } = require('./db/db');
+const { createSharedStore } = require('./middleware/rateLimitStore');
+const logger = require('./lib/logger');
 const authRoutes = require('./routes/auth.routes');
 const usageRoutes = require('./routes/usage.routes');
 const aiRoutes = require('./routes/ai.routes');
