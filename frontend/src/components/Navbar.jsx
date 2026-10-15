@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaUser, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { clearSession, isLoggedIn } from './auth';
-import apiClient from './apiClient';
+import { clearSession, isLoggedIn } from '../lib/auth';
+import apiClient from '../lib/apiClient';
 
 const Navbar = () => {
   const [isLoggedInState, setIsLoggedInState] = useState(false);

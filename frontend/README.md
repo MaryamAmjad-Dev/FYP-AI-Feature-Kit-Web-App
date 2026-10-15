@@ -44,7 +44,7 @@ cd ai-kit
 
 ### 2. Database Setup
 - Create a PostgreSQL database (default: `webai`).
-- Run the SQL in `backend/schema.sql` to create tables.
+- Run the SQL in `backend/db/schema.sql` to create tables.
 
 ### 3. Backend Setup
 ```sh
@@ -64,7 +64,7 @@ npm run dev
 
 ## Environment Variables
 - For email feedback, set up your email and app password in `server.js` (see nodemailer config).
-- For AI APIs, set your API keys in `frontend/src/api.jsx`.
+- For AI APIs, set your API keys in `frontend/src/lib/api.jsx`.
 
 ## Usage
 - Register and log in as a user.

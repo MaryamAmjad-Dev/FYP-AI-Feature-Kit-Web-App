@@ -1,6 +1,6 @@
 const path = require('path');
 const dotenv = require('dotenv');
-const logger = require('./logger');
+const logger = require('../lib/logger');
 
 // Load backend/.env (all secrets live here — never in source code)
 dotenv.config({ path: path.join(__dirname, '.env') });

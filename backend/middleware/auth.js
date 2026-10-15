@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { config } = require('./config');
-const { db } = require('./db');
-const logger = require('./logger');
+const { config } = require('../config/config');
+const { db } = require('../db/db');
+const logger = require('../lib/logger');
 
 let jwtSecret = config.jwt.secret;
 

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { logFeatureUsage } from './api';
-import { isLoggedIn } from './auth';
+import { logFeatureUsage } from '../lib/api';
+import useSession from '../hooks/useSession';
 
 export default function TexttoSpeech() {
-  const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
+  const isLoggedInState = useSession();
   const [text, setText] = useState('');
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState('');
@@ -14,13 +12,6 @@ export default function TexttoSpeech() {
   const [isPaused, setIsPaused] = useState(false);
   const [activeButton, setActiveButton] = useState('');
 
-  useEffect(() => {
-    const loggedIn = isLoggedIn();
-    setIsLoggedInState(loggedIn);
-    if (!loggedIn) {
-      navigate('/login');
-    }
-  }, [navigate]);
   useEffect(() => {
     const loadVoices = () => {
       const availableVoices = window.speechSynthesis.getVoices();
@@ -91,15 +82,15 @@ export default function TexttoSpeech() {
     }`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-4 md:p-6 lg:p-10">
+    <div className="min-h-screen flex items-center justify-center page-bg text-white p-4 md:p-6 lg:p-10">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-5xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 md:p-10 lg:p-12 shadow-2xl space-y-10 overflow-visible"
+        className="w-full max-w-5xl glass-card border border-white/20 rounded-2xl p-6 md:p-10 lg:p-12 shadow-2xl space-y-10 overflow-visible"
       >
         <div className="text-center">
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-3xl md:text-4xl font-bold gradient-title">
             Text to Speech Generator
           </h1>
           <p className="text-sm text-white">Convert your text into realistic speech</p>

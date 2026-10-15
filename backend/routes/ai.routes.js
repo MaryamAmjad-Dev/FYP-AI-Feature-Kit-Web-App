@@ -1,10 +1,10 @@
 const express = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
-const { config } = require('../config');
-const { requireAuth } = require('../auth');
-const logger = require('../logger');
-const { LIMITS, asString } = require('../validators');
+const { config } = require('../config/config');
+const { requireAuth } = require('../middleware/auth');
+const logger = require('../lib/logger');
+const { LIMITS, asString } = require('../lib/validators');
 
 const router = express.Router();
 

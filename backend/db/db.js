@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { config } = require('./config');
-const logger = require('./logger');
+const { config } = require('../config/config');
+const logger = require('../lib/logger');
 
 // PostgreSQL connection pool: it transparently reconnects, keeps idle
 // connections alive and can serve concurrent requests.

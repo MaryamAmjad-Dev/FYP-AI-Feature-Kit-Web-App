@@ -29,7 +29,7 @@ const About = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-6 md:p-12">
+    <div className="min-h-screen page-bg text-white p-6 md:p-12">
       {/* Header */}
       <motion.div
         className="text-center mb-16"
@@ -37,7 +37,7 @@ const About = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1 }}
       >
-        <h1 className="text-5xl md:text-6xl font-extrabold mb-4 bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+        <h1 className="text-5xl md:text-6xl font-extrabold mb-4 gradient-title">
           About Us
         </h1>
         <p className="text-lg md:text-xl text-white max-w-4xl mx-auto">
@@ -91,7 +91,7 @@ const About = () => {
         transition={{ duration: 0.8 }}
       >
         <div className="text-center mb-10">
-          <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h2 className="text-4xl md:text-5xl font-bold gradient-title">
             Meet the Team
           </h2>
           <p className="text-1xl text-white mt-2"><b>Two creators, One vision.</b></p>

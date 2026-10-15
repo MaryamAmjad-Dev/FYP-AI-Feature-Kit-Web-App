@@ -1,9 +1,9 @@
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
 
-const { db } = require('../db');
-const { config } = require('../config');
-const logger = require('../logger');
+const { db } = require('../db/db');
+const { config } = require('../config/config');
+const logger = require('../lib/logger');
 const {
   clearSessionCookie,
   generateResetToken,
@@ -12,9 +12,9 @@ const {
   requireAuth,
   setSessionCookie,
   signToken,
-} = require('../auth');
-const { compareAgainstDummy, hashPassword, verifyPassword } = require('../passwords');
-const { sendPasswordResetEmail } = require('../mailer');
+} = require('../middleware/auth');
+const { compareAgainstDummy, hashPassword, verifyPassword } = require('../lib/passwords');
+const { sendPasswordResetEmail } = require('../services/mailer');
 const {
   asString,
   isValidEmail,
@@ -23,7 +23,7 @@ const {
   validateLogin,
   validatePassword,
   validateSignup,
-} = require('../validators');
+} = require('../lib/validators');
 
 const router = express.Router();
 

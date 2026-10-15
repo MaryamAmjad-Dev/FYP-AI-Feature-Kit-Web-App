@@ -1,5 +1,68 @@
 @import "tailwindcss";
 
+/* ────────────────────────────────────────────────────────────────────────
+ * Reusable design-system utilities — single source of truth.
+ *
+ * Ye 4 classes wahi styles hain jo pehle har page mein giant class-string
+ * ki tarah copy-paste hoti thi (15x background, 17x heading, 10x card,
+ * 7x CTA button). Ab ek jagah: ek change → poore app mein.
+ *
+ * Purani dead class `animate-gradient-x` ka intended animation ab
+ * `page-bg` ke andar hai: gradient diskhe jaane layak halke pan hota hai
+ * (10s loop), aur `prefers-reduced-motion` par animation off.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+@utility page-bg {
+  background-image: linear-gradient(
+    to right,
+    var(--color-blue-900),
+    var(--color-purple-900),
+    var(--color-indigo-900)
+  );
+  background-size: 200% 200%;
+  animation: gradient-pan 10s ease infinite;
+}
+
+/* Pan ko accessible rakho: reduced-motion par static gradient */
+@keyframes gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-bg {
+    animation: none;
+  }
+}
+
+@utility glass-card {
+  background-color: color-mix(in oklab, white 10%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+@utility gradient-title {
+  background-image: linear-gradient(to right, var(--color-fuchsia-400), var(--color-rose-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility btn-primary {
+  background-image: linear-gradient(to right, var(--color-pink-500), var(--color-indigo-500));
+
+  &:hover {
+    background-image: linear-gradient(to right, var(--color-pink-600), var(--color-indigo-600));
+  }
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 1s ease-in-out;

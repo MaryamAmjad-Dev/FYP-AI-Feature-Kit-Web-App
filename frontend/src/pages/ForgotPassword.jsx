@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import apiClient from './apiClient';
+import apiClient from '../lib/apiClient';
 
 /**
  * Two-step password reset:
@@ -103,10 +103,10 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x p-4">
-      <div className="w-full max-w-md backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-xl space-y-6">
+    <div className="min-h-screen flex items-center justify-center page-bg p-4">
+      <div className="w-full max-w-md glass-card border border-white/20 rounded-2xl p-8 shadow-xl space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-3xl font-bold gradient-title">
             {step === 'request' ? 'Forgot Password' : 'Reset Password'}
           </h1>
           <p className="text-sm text-white">
@@ -137,7 +137,7 @@ const ForgotPassword = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 text-white font-bold py-3 rounded-lg transition-all disabled:opacity-60"
+              className="w-full btn-primary text-white font-bold py-3 rounded-lg transition-all disabled:opacity-60"
             >
               {loading ? 'Sending...' : 'Send Reset Code'}
             </button>
@@ -209,7 +209,7 @@ const ForgotPassword = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 text-white font-bold py-3 rounded-lg transition-all disabled:opacity-60"
+              className="w-full btn-primary text-white font-bold py-3 rounded-lg transition-all disabled:opacity-60"
             >
               {loading ? 'Updating...' : 'Change Password'}
             </button>

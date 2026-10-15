@@ -1,20 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaRobot, FaBrain, FaCloud, FaRocket, FaLock, FaBolt } from 'react-icons/fa';
-import { isLoggedIn } from './auth';
+import useSession from '../hooks/useSession';
 
 
 const Home = () => {
   const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
-
-  useEffect(() => {
-    setIsLoggedInState(isLoggedIn());
-  }, []);
+  const isLoggedInState = useSession();
 
   return (
-    <div className="min-h-screen text-white font-sans bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x">
+    <div className="min-h-screen text-white font-sans page-bg">
       
 
       {/* Hero Section */}
@@ -23,7 +19,7 @@ const Home = () => {
           initial={{ opacity: 0, y: -40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1 }}
-          className="text-5xl md:text-7xl font-extrabold mb-6 bg-gradient-to-r  from-fuchsia-400 to-rose-500 text-transparent bg-clip-text"
+          className="text-5xl md:text-7xl font-extrabold mb-6 gradient-title"
         >
           The Future of Intelligence
         </motion.h1>

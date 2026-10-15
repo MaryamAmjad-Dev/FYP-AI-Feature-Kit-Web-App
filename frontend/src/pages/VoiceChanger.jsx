@@ -1,15 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaMicrophone, FaPlay, FaStop, FaUpload, FaDownload } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import useSession from '../hooks/useSession';
 import * as Tone from 'tone';
 import audioBufferToWav from 'audiobuffer-to-wav';
-import { logFeatureUsage } from './api';
-import { isLoggedIn } from './auth';
+import { logFeatureUsage } from '../lib/api';
 
 const VoiceChanger = () => {
-  const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
+  const isLoggedInState = useSession();
 
   const [audioFile, setAudioFile] = useState(null);
   const [effect, setEffect] = useState('normal');
@@ -22,14 +20,6 @@ const VoiceChanger = () => {
   const intervalRef = useRef(null);
   const [processedAudioUrl, setProcessedAudioUrl] = useState(null);
   const objectUrlsRef = useRef({ source: '', processed: '' });
-
-  useEffect(() => {
-    const loggedIn = isLoggedIn();
-    setIsLoggedInState(loggedIn);
-    if (!loggedIn) {
-      navigate('/login');
-    }
-  }, [navigate]);
 
   const releaseObjectUrl = (key) => {
     if (objectUrlsRef.current[key]) {
@@ -244,15 +234,15 @@ const VoiceChanger = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-6">
+    <div className="min-h-screen page-bg text-white p-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="max-w-4xl mx-auto backdrop-blur-xl bg-white/10 rounded-2xl p-6 shadow-2xl space-y-10"
+        className="max-w-4xl mx-auto glass-card rounded-2xl p-6 shadow-2xl space-y-10"
       >
         <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-4xl font-bold gradient-title">
             Voice Changer
           </h1>
           <p className="text-sm mt-2">Transform your voice with our advanced AI-powered effects</p>

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { originMatches, parseCorsOrigins } = require('../config');
+const { originMatches, parseCorsOrigins } = require('../config/config');
 
 test('exact origins match only themselves', () => {
   assert.ok(originMatches('https://app.vercel.app', 'https://app.vercel.app'));

@@ -1,32 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { extractErrorMessage, logFeatureUsage, summarizeText } from './api';
-import { isLoggedIn } from './auth';
-import {
-  FaFileAlt,
-  FaSpinner,
-  FaCopy,
-  FaDownload,
-  FaExpand,
-  FaCompress,
-} from 'react-icons/fa';
+import { extractErrorMessage, logFeatureUsage, summarizeText } from '../lib/api';
+import { downloadBlob } from '../lib/download';
+import useSession from '../hooks/useSession';
+import Spinner from '../components/ui/Spinner';
+import { FaFileAlt, FaCopy, FaDownload, FaExpand, FaCompress } from 'react-icons/fa';
 
 export default function TextSummarizer() {
-  const navigate = useNavigate();
-  const [isLoggedInState, setIsLoggedInState] = useState(false);
+  const isLoggedInState = useSession();
   const [text, setText] = useState('');
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  useEffect(() => {
-    const loggedIn = isLoggedIn();
-    setIsLoggedInState(loggedIn);
-    if (!loggedIn) {
-      navigate('/login');
-    }
-  }, [navigate]);
-
   const handleSummarize = async () => {
     if (!text.trim()) return alert('Please enter some text to summarize.');
 
@@ -51,29 +36,20 @@ export default function TextSummarizer() {
   };
 
   const handleDownload = () => {
-    const element = document.createElement('a');
-    const file = new Blob([summary], { type: 'text/plain' });
-    const url = URL.createObjectURL(file);
-    element.href = url;
-    element.download = 'summary.txt';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    // Memory: release the download URL right after the click is dispatched.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(new Blob([summary], { type: 'text/plain' }), 'summary.txt');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white p-6">
+    <div className="min-h-screen flex items-center justify-center page-bg text-white p-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-3xl backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-10 md:p-12 shadow-2xl space-y-10"
+        className="w-full max-w-3xl glass-card border border-white/20 rounded-2xl p-10 md:p-12 shadow-2xl space-y-10"
       >
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+          <h1 className="text-4xl font-bold gradient-title">
             Text Summarizer
           </h1>
           <p className="text-sm text-white mt-2">
@@ -111,12 +87,12 @@ export default function TextSummarizer() {
             className={`flex items-center gap-2 px-8 py-3 rounded-xl font-semibold transition-all ${
               !text.trim() || loading
                 ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600'
+                : 'btn-primary'
             }`}
           >
             {loading ? (
               <>
-                <FaSpinner className="w-5 h-5 animate-spin" />
+                <Spinner />
                 Summarizing...
               </>
             ) : (
@@ -131,7 +107,7 @@ export default function TextSummarizer() {
         {/* Output Section */}
         {loading && (
           <div className="flex flex-col items-center justify-center p-8 bg-white/10 rounded-xl">
-            <FaSpinner className="w-12 h-12 animate-spin text-pink-400 mb-4" />
+            <Spinner className="w-12 h-12 text-pink-400 mb-4" />
             <p className="text-gray-300">Generating summary...</p>
           </div>
         )}

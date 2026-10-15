@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { FaHistory, FaFilter, FaSearch, FaImage, FaMicrophone, FaFileAlt, FaSync, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
-import apiClient from './apiClient';
-import { extractErrorMessage } from './api';
+import apiClient from '../lib/apiClient';
+import { extractErrorMessage } from '../lib/api';
 
 const PAGE_SIZE = 20;
 
 // Server feature keys → display metadata (the allow-list lives in
-// backend/validators.js; anything unknown falls back to a generic row).
+// backend/lib/validators.js; anything unknown falls back to a generic row).
 const FEATURE_META = {
   'text-to-image': { label: 'Text to Image', type: 'image', Icon: FaImage },
   'remove-bg': { label: 'Background Remover', type: 'image', Icon: FaImage },
@@ -91,7 +91,7 @@ export default function History() {
         className="max-w-6xl mx-auto"
       >
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
+          <h1 className="text-4xl font-bold mb-4 gradient-title">
             History
           </h1>
           <p className="text-lg text-gray-300">

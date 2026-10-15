@@ -12,7 +12,7 @@ const Terms = () => {
   }, [pathname]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 bg-[length:200%_200%] animate-gradient-x text-white overflow-y-auto px-6 py-10">
+    <div className="fixed inset-0 z-50 page-bg text-white overflow-y-auto px-6 py-10">
       <div className="max-w-4xl mx-auto relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl text-gray-200">
         {/* Close button */}
         <button
@@ -22,7 +22,7 @@ const Terms = () => {
         >
           <FaTimes />
         </button>
-        <h1 className="text-4xl md:text-5xl font-bold text-center mb-8 bg-gradient-to-r from-fuchsia-400 to-rose-500 text-transparent bg-clip-text">
+        <h1 className="text-4xl md:text-5xl font-bold text-center mb-8 gradient-title">
           Terms and Conditions
         </h1>
 
@@ -78,7 +78,7 @@ const Terms = () => {
           <div className="text-center pt-6">
             <button
               onClick={() => navigate('/signup')}
-              className="bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 text-white font-semibold py-3 px-8 rounded-lg transition-all"
+              className="btn-primary text-white font-semibold py-3 px-8 rounded-lg transition-all"
             >
               Back to Signup
             </button>

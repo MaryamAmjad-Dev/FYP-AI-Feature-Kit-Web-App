@@ -237,7 +237,7 @@ from this repository, with a **Neon** PostgreSQL database.
    ```
    postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
    ```
-3. In the Neon **SQL editor**, run the contents of `backend/schema.sql` once
+3. In the Neon **SQL editor**, run the contents of `backend/db/schema.sql` once
    (or let the API create the tables on its first request — then skip
    `SKIP_SCHEMA_INIT` below).
 
