@@ -1,3 +1,5 @@
+import React from 'react';
+
 /** Suspense fallback while a lazily loaded route chunk downloads. */
 export default function PageFallback() {
   return (
