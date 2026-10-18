@@ -26,3 +26,4 @@ backend/dist/
 Thumbs.db
 # Vercel CLI
 .vercel/
+.vercel
