@@ -1,11 +1,9 @@
 import React, { useState } from "react";
-import { FaGoogle, FaGithub, FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
+import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate, Link } from "react-router-dom";
 import apiClient from "../lib/apiClient";
 import { setSession } from "../lib/auth";
 import { extractErrorMessage } from "../lib/api";
-import { startOAuthLogin } from "../lib/oauth";
-import useOAuthProviders from "../hooks/useOAuthProviders";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -14,13 +12,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [redirectingTo, setRedirectingTo] = useState(null);
   const navigate = useNavigate();
-  const oauthInfo = useOAuthProviders();
-
-  // null info = still loading / API unreachable → leave the button clickable,
-  // the server answers with a clear message if the provider really is missing.
-  const isAvailable = (provider) => oauthInfo?.providers?.[provider] !== false;
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -48,19 +40,6 @@ const Login = () => {
       setLoading(false);
     }
   };
-
-  /**
-   * Full-page redirect to the API, which starts the OAuth round trip and sets
-   * the httpOnly session cookie on the way back (see /auth/callback).
-   */
-  const handleSocialLogin = (provider) => {
-    if (!isAvailable(provider) || redirectingTo) return;
-    setError("");
-    setRedirectingTo(provider);
-    startOAuthLogin(provider);
-  };
-
-  const unconfigured = ["google", "github"].filter((provider) => !isAvailable(provider));
 
   return (
     <div className="min-h-screen flex items-center justify-center page-bg p-4">
@@ -150,49 +129,6 @@ const Login = () => {
             <b>Sign up</b>
           </Link>
         </p>
-
-        <div className="flex flex-col gap-4 pt-4">
-          <p className="text-xs uppercase tracking-wide text-gray-200 text-center">
-            or continue with
-          </p>
-
-          <button
-            type="button"
-            onClick={() => handleSocialLogin("google")}
-            disabled={!isAvailable("google") || Boolean(redirectingTo)}
-            title={
-              isAvailable("google")
-                ? "Sign in with your Google account"
-                : "Google OAuth credentials are not set on the server"
-            }
-            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-red-200 via-pink-300 to-red-300 hover:opacity-90 text-gray-900 font-semibold py-2.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FaGoogle /> {redirectingTo === "google" ? "Opening Google…" : "Login with Google"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSocialLogin("github")}
-            disabled={!isAvailable("github") || Boolean(redirectingTo)}
-            title={
-              isAvailable("github")
-                ? "Sign in with your GitHub account"
-                : "GitHub OAuth credentials are not set on the server"
-            }
-            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gray-200 to-gray-400 hover:opacity-90 text-gray-900 font-semibold py-2.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FaGithub /> {redirectingTo === "github" ? "Opening GitHub…" : "Login with GitHub"}
-          </button>
-
-          {unconfigured.length > 0 && (
-            <p className="text-xs text-gray-200 text-center">
-              {unconfigured
-                .map((id) => (id === "google" ? "Google" : "GitHub"))
-                .join(" and ")}{" "}
-              sign-in isn’t configured on the server yet.
-            </p>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const logger = require('../lib/logger');
 const { LIMITS, asString } = require('../lib/validators');
 const { summarize } = require('../lib/summarizer');
+const { criticizePrompt } = require('../lib/promptCritic');
 
 const router = express.Router();
 
@@ -175,6 +176,22 @@ router.post('/summarize', async (req, res) => {
     logger.error('summarize failed', { message: error.message });
     return res.status(502).json({ success: false, message: 'Summarization failed.' });
   }
+});
+
+// POST /api/ai/criticize-prompt  { prompt }
+//
+// Deterministic, rule-based critique of the prompt TEXT itself (see
+// lib/promptCritic.js). It is NOT a language or vision model and it does NOT
+// look at the generated image — no vision provider is configured. It needs no
+// API key and never leaves the server, so it is cheap and always available.
+router.post('/criticize-prompt', (req, res) => {
+  const prompt = asString((req.body || {}).prompt).trim();
+  if (!prompt || prompt.length > LIMITS.prompt) {
+    return res
+      .status(400)
+      .json({ success: false, message: `Prompt must be 1-${LIMITS.prompt} characters.` });
+  }
+  return res.json(criticizePrompt(prompt));
 });
 
 module.exports = router;

@@ -17,14 +17,15 @@ test('schema.sql parses into statements the app can execute', () => {
   }
 });
 
-test('schema carries every column the auth and OAuth routes write to', () => {
+test('schema carries the auth columns and the retained provider columns', () => {
   const sql = statements.join('\n').toLowerCase();
 
   // Email/password sign-in
   assert.match(sql, /create table if not exists users/);
   assert.match(sql, /password\s+varchar\(255\) not null/);
   assert.match(sql, /token_version integer not null default 0/);
-  // Social sign-in (Google / GitHub)
+  // Retained provider columns (left in place to avoid a destructive migration;
+  // no route writes them any more).
   assert.match(sql, /add column if not exists provider varchar\(16\) not null default 'local'/);
   assert.match(sql, /add column if not exists provider_id varchar\(255\)/);
   assert.match(sql, /create unique index if not exists idx_users_provider_id/);

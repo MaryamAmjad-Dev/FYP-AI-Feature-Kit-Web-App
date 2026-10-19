@@ -42,6 +42,16 @@ export async function summarizeText(text) {
   return res.data;
 }
 
+/**
+ * Runs the rule-based prompt critic. Returns { originalPrompt, improvedPrompt,
+ * score, summary, strengths, improvements, missingDimensions, notes }.
+ * This analyzes the prompt TEXT only — it does not inspect the image.
+ */
+export async function criticizePrompt(prompt) {
+  const res = await apiClient.post('/ai/criticize-prompt', { prompt });
+  return res.data;
+}
+
 /** Records usage for the logged-in user (the server derives the user id). */
 export async function logFeatureUsage(feature) {
   try {

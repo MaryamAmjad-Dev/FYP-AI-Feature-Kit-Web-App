@@ -15,7 +15,6 @@ import Login from './src/pages/Login';
 import Signup from './src/pages/Signup';
 import About from './src/pages/About';
 import Contact from './src/pages/Contact';
-import AuthCallback from './src/pages/AuthCallback';
 import Profile from './src/pages/Profile';
 import History from './src/pages/History';
 import TextSummarizer from './src/pages/TextSummarizer';
@@ -62,7 +61,6 @@ const pages = {
   Signup,
   About,
   Contact,
-  AuthCallback,
   Profile,
   History,
   TextSummarizer,
