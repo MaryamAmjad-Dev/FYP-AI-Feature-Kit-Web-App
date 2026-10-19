@@ -38,6 +38,7 @@ The project is designed with a modern React frontend, an Express.js backend, Pos
 - 📜 Feature Usage History
 - 👤 User Profile Management
 - 🔒 Secure Login & Signup
+- 🔑 Login / Sign up with **Google** and **GitHub** (OAuth 2.0)
 - 📱 Responsive User Interface
 
 ---
@@ -256,6 +257,8 @@ from this repository, with a **Neon** PostgreSQL database.
    | `CORS_ORIGINS` | frontend URL from step 3 (e.g. `https://app.vercel.app`) |
    | `APP_URL` | frontend URL (used in password-reset emails) |
    | `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` | optional AI features |
+   | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional — enables "Login with Google" (empty pair = button disabled) |
+   | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | optional — enables "Login with GitHub" (empty pair = button disabled) |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | password-reset emails (without SMTP the code is only printed in the function logs — fine for a demo, not for real users) |
 
 5. The API is live at `https://<backend-project>.vercel.app/api/health`.
@@ -362,3 +365,6 @@ frontend lint + production build, and `npm audit` on both packages.
 Final Year Project
 
 Department of Information Technology
+
+- GitHub: [github.com/MaryamAmjad-Dev](https://github.com/MaryamAmjad-Dev)
+- LinkedIn: [linkedin.com/in/maryam-amjad-6a7a8m](https://www.linkedin.com/in/maryam-amjad-6a7a8m/)

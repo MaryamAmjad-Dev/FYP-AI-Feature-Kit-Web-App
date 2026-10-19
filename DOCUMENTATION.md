@@ -69,9 +69,13 @@ voice tone — every usage is tracked for analytics.
 ### Accounts & Platform
 
 - **Signup / Login** with email + password (JWT sessions, 7-day expiry)
+- **"Continue with Google" / "Continue with GitHub"** — full-page OAuth
+  round trip on `/login` and `/signup`; the API creates (or links to) the
+  account and sets the same httpOnly session cookie
 - **Forgot / Reset password** — 2-step: request a code (email via SMTP, or
   server console in dev), then redeem it with a new password
-- **Profile page** with logout
+- **Profile page** with logout (shows the Google/GitHub photo when signed in
+  socially)
 - **Contact form** → saved to the database (optionally emailed to admin)
 - **Usage history** (`/history`) — regular users see their own usage; admin
   emails (configured in env) see everyone's usage joined with user info
@@ -285,6 +289,10 @@ configured, password-reset codes are printed on the **backend console**.
 | `RESET_TOKEN_TTL_MINUTES` | optional | Reset-code validity, default `30` |
 | `SMTP_HOST/PORT/USER/PASS/FROM` | prod emails | Without SMTP, reset codes go to the server console (dev only) |
 | `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` | AI tools | Server-side only — never exposed to the browser |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | social login | Google OAuth (Cloud Console → Credentials → Web application). Empty pair = the Google button renders disabled |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | social login | GitHub OAuth (Settings → Developer settings → New OAuth App). Empty pair = the GitHub button renders disabled |
+| `OAUTH_CALLBACK_BASE` | usually not | Base URL (incl. `/api`) providers redirect to — defaults to `<APP_URL>/api`, correct for the Vite proxy and for the frontend's `vercel.json` rewrite. Set it only when the API has its own domain |
+| `OAUTH_STATE_TTL_MINUTES` | optional | Anti-CSRF `state` cookie lifetime, default `10` |
 
 ### `frontend/.env` (optional)
 
@@ -307,6 +315,10 @@ email       VARCHAR(255)  email       VARCHAR(255)
             UNIQUE                    message       TEXT
 password    VARCHAR(255)  created_at  TIMESTAMPTZ
             (bcrypt hash)
+profile     JSONB         ← role, contact, bio, skills, links, avatar
+token_version INTEGER     ← bumped on password change (revokes sessions)
+provider    VARCHAR(16)   ← 'local' | 'google' | 'github'
+provider_id VARCHAR(255)  ← the id the provider issued (NULL for 'local')
 created_at  TIMESTAMPTZ
 
 user_feature_usage        password_reset_tokens
@@ -327,6 +339,11 @@ used_at     TIMESTAMPTZ               expires_at   TIMESTAMPTZ
   emailed code; the raw code exists only in the email/console.
 - Valid `feature` values: `text-to-image`, `remove-bg`, `voice-changer`,
   `text-to-speech`, `text-summarizer` (validated server-side).
+- Social sign-in is tracked by `(provider, provider_id)` with a **partial
+  unique index** (`WHERE provider_id IS NOT NULL`), so password accounts stay
+  outside it. Accounts created by Google/GitHub get a random 256-bit password
+  nobody knows — the row keeps the `NOT NULL password` contract while the
+  password login stays unusable for it.
 
 ---
 
@@ -350,13 +367,36 @@ automatically by the frontend) or `Authorization: Bearer <token>` for scripts.
 | POST | `/api/signup` | — | `{name, email, password}` | `201` + `userId` |
 | POST | `/api/login` | — | `{email, password, remember?}` | `200` + `Set-Cookie: afk_session` (httpOnly JWT, 7 d). **No token in the body** — the cookie travels automatically |
 | POST | `/api/logout` | cookie | — | `200`, clears the cookie (safe to call when logged out) |
-| GET | `/api/me` | ✅ | — | `200` + `{user:{id,name,email,role,phone,location,bio,skills,linkedin,github}}` |
+| GET | `/api/me` | ✅ | — | `200` + `{user:{id,name,email,role,phone,location,bio,skills,linkedin,github,avatar}}` |
 | PATCH | `/api/profile` | ✅ | `{name?, role?, phone?, location?, bio?, skills?, linkedin?, github?}` | `200` + `{user}` — unknown keys are rejected (400), URLs must be `https://` |
 | POST | `/api/forgot-password` | — | `{email}` | `200` **always** (no user enumeration); if the account exists, a code is emailed (or printed on the server console in dev) |
 | POST | `/api/reset-password` | — | `{token, newPassword}` | `200`; single-use, expires after 30 min, and **revokes every existing session** (`token_version++`) |
 
 **Validation rules (server-side):** name ≤ 100 chars · email ≤ 254 chars and
 well-formed · password 8–128 chars with at least one letter and one digit.
+
+### Social login (Google / GitHub)
+
+Full-page redirect flow (never a popup — the httpOnly cookie has to be set by
+the API on the way back):
+
+| Method | Path | Auth | Behaviour |
+|---|---|---|---|
+| GET | `/api/auth/providers` | — | `{providers:{google,github}, redirectUris:{…}}` — which buttons to offer and which URIs to register |
+| GET | `/api/auth/google` | — | Sets an httpOnly `state` cookie → `302` to Google's consent screen (or back to `/auth/callback?code=not-configured` when unconfigured) |
+| GET | `/api/auth/google/callback` | — | Validates `state`, exchanges the code server-side, creates/finds the user, sets `afk_session` → `302` to `/auth/callback?status=success` |
+| GET | `/api/auth/github` | — | Same, with GitHub (`scope=read:user user:email`) |
+| GET | `/api/auth/github/callback` | — | Same, requiring a **verified** email from GitHub |
+
+Failure always lands on `/auth/callback?status=error&provider=…&code=…`, where
+`code` is one of: `not-configured`, `state-mismatch`, `provider-denied`,
+`provider-unreachable`, `exchange-failed`, `provider-error`,
+`incomplete-profile`, `no-verified-email`, `unverified-email`,
+`server-error` — each mapped to a sentence in `frontend/src/lib/oauth.js`.
+
+Account resolution order: same `(provider, provider_id)` → same `email` (the
+provider proved mailbox ownership, so the provider is linked to the existing
+account) → brand new account.
 
 ### Feature usage & contact
 
@@ -462,6 +502,7 @@ Logout:  POST /api/logout ──▶ clears the cookie
 | Log hygiene | Structured JSON logger (`LOG_LEVEL`); no secrets or tokens are ever logged |
 | Error handling | Central JSON error handler; no stack traces leak to clients |
 | Secrets in git | `.env` git-ignored; `.env.example` has empty placeholders only |
+| Social login | `state` cookie (httpOnly, 10 min, constant-time verified, provider-prefixed) blocks CSRF on the OAuth redirect; codes are exchanged server-to-server so the client secret never reaches the browser; unverified provider emails can neither create nor claim an account |
 
 ---
 
@@ -475,6 +516,7 @@ Logout:  POST /api/logout ──▶ clears the cookie
 | `/home` | Redirects to `/` (the old URL still works for shared links) | — |
 | `/features` | Feature grid | — |
 | `/login`, `/signup`, `/forgot-password`, `/reset-password` | Auth pages | — |
+| `/auth/callback` | Where Google/GitHub return after signing in: confirms the result, loads the user via `GET /api/me`, stores the session, goes home | — (cookie is already set) |
 | `/text-to-image`, `/background-removal`, `/text-summarizer`, `/text-to-speech`, `/voice-changer` | AI tools (each page redirects guests to `/login` itself) | ✅ |
 | `/profile` | Profile editor (PATCH `/api/profile`) | ✅ (`ProtectedRoute`) |
 | `/history` | Real usage history from `GET /api/feature-usage` | ✅ (`ProtectedRoute`) |
@@ -498,6 +540,12 @@ Logout:  POST /api/logout ──▶ clears the cookie
   re-dispatches `auth:changed` so every tab (and the Navbar) stay in sync.
 - **`urls.js`** — `safeExternalUrl()` keeps only `https://` links; Profile
   rejects anything else before rendering LinkedIn/GitHub icons.
+- **`oauth.js`** — `startOAuthLogin(provider)` navigates to
+  `<api base>/auth/{google,github}` (correct behind the dev proxy and with a
+  dedicated API origin), `fetchOAuthProviders()` reads which buttons are live,
+  and `oauthErrorMessage()` turns the `?code=` from the redirect into a
+  human sentence. `hooks/useOAuthProviders.js` wraps the fetch for
+  Login/Signup; `pages/AuthCallback.jsx` finishes the round trip.
 - **`api.jsx`** — small wrappers (`login()`, `signup()`, `generateImage()`,
   `removeBackground()`, `summarize()`, `logFeature()`, …) so components never
   hand-write URLs.
@@ -520,10 +568,15 @@ npm test          # from the repository root
 
 Runs two suites:
 
-1. **Unit tests** (Node's built-in `node --test`, no framework) — 28 tests:
+1. **Unit tests** (Node's built-in `node --test`, no framework) — 39 tests:
    - `validators.test.js` — signup/login/feature/message rules, image cap,
      profile field allow-list + URL validation
-   - `auth.test.js` — JWT sign/verify, `ver` claim, and middleware behaviour
+   - `auth.test.js` — JWT sign/verify, `ver` claim, middleware behaviour, and
+     `isDatabaseUnavailable` (a down database must degrade, not answer 500)
+   - `oauth.test.js` — OAuth state minting/verification (CSRF), authorize URLs,
+     configured-provider reporting, landing URLs, route registration
+   - `schema.test.js` — `schema.sql` still parses into runnable statements and
+     carries every column the auth/OAuth routes write
    - `passwords.test.js` — bcrypt hashing + legacy plain-text upgrade
    - `cors.test.js` — origin matcher incl. wildcard sub-domains and the
      `CORS_ALLOW_WILDCARD` gate
@@ -545,11 +598,21 @@ npm run test:all   # both
 DB_HOST=… DB_PORT=… DB_USER=… DB_NAME=… DB_PASSWORD=… SMOKE_REQUIRE_DB=true npm run test:all
 ```
 
+3. **Frontend render smoke test** — renders every page through
+   `react-dom/server` (`frontend/smoke.render.jsx`), so a render-time crash
+   fails the build instead of shipping:
+
+```bash
+# from frontend/
+npm run test:render   # 15 pages must render, non-zero exit otherwise
+```
+
 CI runs this on every push/PR (`.github/workflows/ci.yml`): the backend job
 spins up a Postgres 16 service container and runs `npm run test:all` with
 `SMOKE_REQUIRE_DB=true` (so a broken migration fails the build instead of
 quietly accepting 500s), then `npm audit --omit=dev --audit-level=high`; the
-frontend job runs `npm run lint`, `npm run build` and a full `npm audit`.
+frontend job runs `npm run lint`, `npm run build`, the page render smoke test
+and a full `npm audit`.
 
 ---
 
@@ -679,7 +742,10 @@ slower and returns 500 — check the function logs for `Schema init failed`.
 ## 🧑‍🎓 Author
 
 **Maryam Amjad** — Final Year Project, AI Feature Kit
-Repository: [MaryamAmjad-Dev/FYP-AI-Feature-Kit-Web-App](https://github.com/MaryamAmjad-Dev/FYP-AI-Feature-Kit-Web-App)
+
+- GitHub: [github.com/MaryamAmjad-Dev](https://github.com/MaryamAmjad-Dev)
+- LinkedIn: [linkedin.com/in/maryam-amjad-6a7a8m](https://www.linkedin.com/in/maryam-amjad-6a7a8m/)
+- Repository: [MaryamAmjad-Dev/FYP-AI-Feature-Kit-Web-App](https://github.com/MaryamAmjad-Dev/FYP-AI-Feature-Kit-Web-App)
 
 *Documentation generated during the security hardening + PostgreSQL/Vercel
 migration of October 2026.*

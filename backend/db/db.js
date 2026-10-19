@@ -84,4 +84,4 @@ async function closePool() {
   await pool.end();
 }
 
-module.exports = { pool, db, initSchema, closePool };
+module.exports = { pool, db, initSchema, closePool, loadSchemaStatements };

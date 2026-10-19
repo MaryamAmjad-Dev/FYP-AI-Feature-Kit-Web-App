@@ -7,6 +7,7 @@ const {
   generateResetToken,
   hashResetToken,
   isAdmin,
+  isDatabaseUnavailable,
   isValidResetTokenFormat,
   jwtSecret,
   signToken,
@@ -78,4 +79,21 @@ test('isAdmin matches only configured emails', () => {
   assert.equal(fresh.isAdmin('someone-else@example.com'), false);
   assert.equal(fresh.isAdmin(undefined), false);
   assert.equal(isAdmin('nobody@example.com'), false);
+});
+
+test('isDatabaseUnavailable recognises connection failures that carry no message', () => {
+  // pg/Node often report "Postgres is not running" as { code } with an empty
+  // message — those must count as an outage, not as a broken query.
+  assert.equal(isDatabaseUnavailable({ code: 'ECONNREFUSED', message: '' }), true);
+  assert.equal(isDatabaseUnavailable({ code: 'ETIMEDOUT', message: '' }), true);
+  assert.equal(isDatabaseUnavailable({ code: 'ENOTFOUND', message: '' }), true);
+  assert.equal(isDatabaseUnavailable({ code: 'ECONNRESET', message: '' }), true);
+  assert.equal(isDatabaseUnavailable({ code: '57P03', message: 'cannot connect now' }), true);
+  assert.equal(isDatabaseUnavailable({ code: '08006', message: 'connection failure' }), true);
+
+  // A genuine query/programming error must still fail closed (500).
+  assert.equal(isDatabaseUnavailable({ code: '42703', message: 'column "x" does not exist' }), false);
+  assert.equal(isDatabaseUnavailable({ code: '23505', message: 'duplicate key' }), false);
+  assert.equal(isDatabaseUnavailable(new Error('something else')), false);
+  assert.equal(isDatabaseUnavailable(null), false);
 });

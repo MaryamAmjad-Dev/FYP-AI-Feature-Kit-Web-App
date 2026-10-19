@@ -202,6 +202,9 @@ const Profile = () => {
 
   const linkedin = safeExternalUrl(userData.linkedin);
   const github = safeExternalUrl(userData.github);
+  // Social sign-in stores the provider's photo (Google/GitHub). Only https
+  // images are ever rendered, and the referrer is suppressed.
+  const avatarUrl = /^https:\/\//i.test(userData.avatar || '') ? userData.avatar : '';
   const skillCount = parseSkills(form.skills).length;
 
   if (loading) {
@@ -222,8 +225,17 @@ const Profile = () => {
       >
         {/* Header */}
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-          <div className="w-32 h-32 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg shrink-0">
-            <FaUser className="text-white text-4xl" />
+          <div className="w-32 h-32 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={`${userData.name || 'Your'} profile picture`}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <FaUser className="text-white text-4xl" />
+            )}
           </div>
           <div className="text-center md:text-left space-y-2 w-full">
             {editing ? (

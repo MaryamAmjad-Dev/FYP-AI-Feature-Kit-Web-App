@@ -5,6 +5,9 @@ import apiClient from '../lib/apiClient';
 import { extractErrorMessage } from '../lib/api';
 
 const PAGE_SIZE = 20;
+// The API clamps `limit` to 100 rows: that is the window a client-side
+// search/filter runs over while one is active.
+const FILTER_WINDOW = 100;
 
 // Server feature keys → display metadata (the allow-list lives in
 // backend/lib/validators.js; anything unknown falls back to a generic row).
@@ -31,12 +34,19 @@ export default function History() {
   const [sortBy, setSortBy] = useState('date');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadHistory = useCallback(async (pageIndex) => {
+  // Filtering/sorting is applied in the browser, so with a filter active the
+  // list must come from one wide window instead of a single 20-row page —
+  // otherwise matches sitting on other pages would simply be invisible.
+  const isFiltering = filter !== 'all' || searchQuery.trim() !== '';
+
+  const loadHistory = useCallback(async (pageIndex, filtering) => {
     setLoading(true);
     setError('');
     try {
       const res = await apiClient.get('/feature-usage', {
-        params: { limit: PAGE_SIZE, offset: pageIndex * PAGE_SIZE },
+        params: filtering
+          ? { limit: FILTER_WINDOW, offset: 0 }
+          : { limit: PAGE_SIZE, offset: pageIndex * PAGE_SIZE },
       });
       setItems(Array.isArray(res.data.usage) ? res.data.usage : []);
       setScope(res.data.scope || 'own');
@@ -50,8 +60,14 @@ export default function History() {
   }, []);
 
   useEffect(() => {
-    loadHistory(page);
-  }, [page, loadHistory]);
+    // A filter can empty the page we are on; park the pager first so it never
+    // points past the last page (that showed "Page 2 of 1" over an empty list).
+    if (isFiltering && page !== 0) {
+      setPage(0);
+      return;
+    }
+    loadHistory(page, isFiltering);
+  }, [page, isFiltering, loadHistory]);
 
   const filteredItems = items
     .filter((item) => {
@@ -196,8 +212,9 @@ export default function History() {
             )}
           </div>
 
-          {/* Pagination (server-side) */}
-          {total > PAGE_SIZE && (
+          {/* Pagination (server-side). Hidden while a filter/search is active:
+              that list is loaded as one wide window, not page by page. */}
+          {!isFiltering && total > PAGE_SIZE && (
             <div className="flex items-center justify-between mt-8 text-sm text-gray-300">
               <span>
                 {filteredItems.length} shown · {total} total

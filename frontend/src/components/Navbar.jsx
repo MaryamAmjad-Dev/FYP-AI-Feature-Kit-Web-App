@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaUser, FaSignOutAlt, FaBars, FaTimes } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaBars, FaTimes, FaHistory } from 'react-icons/fa';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, isLoggedIn } from '../lib/auth';
 import apiClient from '../lib/apiClient';
@@ -112,7 +112,16 @@ const Navbar = () => {
                         <FaUser className="w-4 h-4 mr-2" />
                         Profile
                       </Link>
-                     
+
+                      <Link
+                        to="/history"
+                        className="flex items-center px-4 py-2 text-white hover:bg-pink-600/40 transition rounded-lg"
+                        onClick={() => setIsDropdownOpen(false)}
+                      >
+                        <FaHistory className="w-4 h-4 mr-2" />
+                        History
+                      </Link>
+                      
                       <button
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-white hover:bg-rose-500/40 transition rounded-lg"
@@ -194,6 +203,14 @@ const Navbar = () => {
                   >
                     <FaUser className="w-4 h-4 mr-2" />
                     Profile
+                  </Link>
+                  <Link
+                    to="/history"
+                    className="flex items-center px-4 py-2 rounded-lg text-white hover:bg-pink-500/30 transition"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <FaHistory className="w-4 h-4 mr-2" />
+                    History
                   </Link>
                   <button
                     onClick={() => {

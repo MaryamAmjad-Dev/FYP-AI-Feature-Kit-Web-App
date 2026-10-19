@@ -67,6 +67,9 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+      - name: Render smoke test (every page must render)
+        working-directory: frontend
+        run: npm run test:render
       - name: Dependency audit (all)
         working-directory: frontend
         run: npm audit --audit-level=high

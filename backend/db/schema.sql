@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
+-- Social login (Google / GitHub): which provider owns the account and the id
+-- that provider issued. 'local' = email + password, which is what every row
+-- created before this column had becomes (and the default for new ones).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(16) NOT NULL DEFAULT 'local';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id VARCHAR(255);
+
+-- At most one row per provider account. Partial: password accounts carry no
+-- provider id, so they are deliberately outside the index.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_id
+  ON users (provider, provider_id)
+  WHERE provider_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS contact_messages (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,

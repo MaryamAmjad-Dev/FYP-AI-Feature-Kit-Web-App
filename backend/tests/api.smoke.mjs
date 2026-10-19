@@ -40,6 +40,11 @@ const server = spawn(process.execPath, ['server.js'], {
     NODE_ENV: 'development',
     // Keep the run independent of the machine's rate-limit history
     ADMIN_EMAILS: 'smoke-admin@example.com',
+    // Never spend real provider quota during a smoke run. These assignments
+    // win over backend/.env because dotenv never replaces existing vars.
+    STABILITY_API_KEY: '',
+    HF_API_TOKEN: '',
+    REMOVE_BG_API_KEY: '',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });

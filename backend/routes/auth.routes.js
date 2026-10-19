@@ -60,6 +60,8 @@ function publicUser(row) {
     skills: Array.isArray(profile.skills) ? profile.skills : [],
     linkedin: profile.linkedin || '',
     github: profile.github || '',
+    // Uploaded by Google/GitHub on social sign-in (empty for password accounts).
+    avatar: profile.avatar || '',
   };
 }
 

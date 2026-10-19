@@ -96,6 +96,13 @@ function extractToken(req) {
 function isDatabaseUnavailable(error) {
   const code = String(error && error.code || '');
   if (/^(08|28|53|57P)/.test(code)) return true;
+  // Node's network errors (and pg's connect failures) often arrive with an
+  // EMPTY message and only `code` set — matching on the message alone would
+  // make a plain "Postgres is not running" look like a broken query, so every
+  // authenticated endpoint would answer 500 instead of serving the request.
+  if (/^(ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|EAI_AGAIN|EPIPE|EHOSTUNREACH|ENETUNREACH|ECONNABORTED)$/.test(code)) {
+    return true;
+  }
   const message = String((error && error.message) || '');
   return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|SASL|password must be|Connection terminated|timeout|socket hang up|no pg HBA|role .* does not exist/i.test(
     message
@@ -186,6 +193,7 @@ module.exports = {
   generateResetToken,
   hashResetToken,
   isAdmin,
+  isDatabaseUnavailable,
   isValidResetTokenFormat,
   parseCookies,
   requireAdmin,

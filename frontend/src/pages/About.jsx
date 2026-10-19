@@ -16,7 +16,8 @@ const About = () => {
       name: 'Maryam Amjad',
       role: 'Project Developer',
       email: 'maryamamjad621@gmail.com',
-      linkedin: 'https://www.linkedin.com/in/maryam-amjad-3a235a315/',
+      linkedin: 'https://www.linkedin.com/in/maryam-amjad-6a7a8m/',
+      github: 'https://github.com/MaryamAmjad-Dev',
       bio: 'Developed the entire project including frontend, backend, and AI integration using React.js, Tailwind CSS, and various APIs.',
     },
     {
@@ -24,6 +25,7 @@ const About = () => {
       role: 'Project Developer',
       email: 'alizasajjad26013@gmail.com',
       linkedin: 'https://www.linkedin.com/in/aliza-sajjad-220880326?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app',
+      github: '',
       bio: 'Prepared the complete documentation of the project, including structure, features, setup, and technology used with clear explanations.',
     },
   ];
@@ -111,22 +113,14 @@ const About = () => {
               <p className="text-white mt-3 text-sm">{member.bio}</p>
 
               <div className="flex justify-center gap-4 mt-5 text-sm flex-wrap">
-                {/* Static mailto links */}
-                {member.name === 'Maryam Amjad' ? (
-                  <a
-                    href="mailto:maryamamjad621@gmail.com"
-                    className="flex items-center gap-2 text-blue-300 hover:text-pink-300 transition"
-                  >
-                    <FaEnvelope className="text-pink-300" /> Email
-                  </a>
-                ) : (
-                  <a
-                    href="mailto:aliza@example.com"
-                    className="flex items-center gap-2 text-blue-300 hover:text-pink-300 transition"
-                  >
-                    <FaEnvelope className="text-pink-300" /> Email
-                  </a>
-                )}
+                {/* Every team card links its real mailbox — the old version
+                    hard-coded one address per person and left a placeholder. */}
+                <a
+                  href={`mailto:${member.email}`}
+                  className="flex items-center gap-2 text-blue-300 hover:text-pink-300 transition"
+                >
+                  <FaEnvelope className="text-pink-300" /> Email
+                </a>
 
                 <a
                   href={member.linkedin}
@@ -136,6 +130,17 @@ const About = () => {
                 >
                   <FaLinkedin className="text-pink-300" /> LinkedIn
                 </a>
+
+                {member.github && (
+                  <a
+                    href={member.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-blue-300 hover:text-pink-300 transition"
+                  >
+                    <FaGithub className="text-pink-300" /> GitHub
+                  </a>
+                )}
               </div>
             </motion.div>
           ))}

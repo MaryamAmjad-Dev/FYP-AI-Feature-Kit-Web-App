@@ -13,13 +13,30 @@ export default function TexttoSpeech() {
   const [activeButton, setActiveButton] = useState('');
 
   useEffect(() => {
+    const synth = window.speechSynthesis;
+
     const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
+      const availableVoices = synth.getVoices();
       setVoices(availableVoices);
-      if (availableVoices.length > 0) setSelectedVoice(availableVoices[0].name);
+      // Preselect only while nothing valid is chosen — `voiceschanged` fires
+      // again later, and resetting then would silently discard the user's pick.
+      setSelectedVoice((current) =>
+        current && availableVoices.some((voice) => voice.name === current)
+          ? current
+          : availableVoices[0]?.name || ''
+      );
     };
+
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    synth.onvoiceschanged = loadVoices;
+
+    return () => {
+      // Leaving the page must stop the audio and drop the global handler,
+      // otherwise speech keeps playing over the next page for the rest of the
+      // session and the handler keeps setState-ing an unmounted component.
+      synth.onvoiceschanged = null;
+      synth.cancel();
+    };
   }, []);
 
   const speak = (textToSpeak, buttonName) => {

@@ -14,7 +14,6 @@ const Footer = () => {
             Empowering the world with intelligent solutions through advanced AI tools.
           </p>
         </div>
-
         {/* Navigation */}
         <div>
           <h3 className="text-lg font-semibold mb-3 text-pink-400">Explore</h3>
@@ -40,9 +39,34 @@ const Footer = () => {
         <div>
           <h3 className="text-lg font-semibold mb-3 text-pink-400">Follow Us</h3>
           <div className="flex space-x-4 text-gray-300">
-            <a href="mailto:your-maryamamjad621@gmail.com" className="hover:text-white transition-all" aria-label="Email"><FaEnvelope /></a>
-            <a href="https://www.linkedin.com/in/maryam-amjad-3a235a315/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-all" aria-label="LinkedIn"><FaLinkedinIn /></a>
-            <a href="https://github.com/maryamaliali" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-all" aria-label="GitHub"><FaGithub /></a>
+            <a
+              href="mailto:maryamamjad621@gmail.com"
+              className="hover:text-white transition-all"
+              aria-label="Email Maryam Amjad"
+              title="Email"
+            >
+              <FaEnvelope />
+            </a>
+            <a
+              href="https://www.linkedin.com/in/maryam-amjad-6a7a8m/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-all"
+              aria-label="Maryam Amjad on LinkedIn"
+              title="LinkedIn"
+            >
+              <FaLinkedinIn />
+            </a>
+            <a
+              href="https://github.com/MaryamAmjad-Dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-all"
+              aria-label="Maryam Amjad on GitHub"
+              title="GitHub"
+            >
+              <FaGithub />
+            </a>
           </div>
         </div>
       </div>

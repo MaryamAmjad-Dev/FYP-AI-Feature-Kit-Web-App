@@ -20,6 +20,20 @@ const VoiceChanger = () => {
   const intervalRef = useRef(null);
   const [processedAudioUrl, setProcessedAudioUrl] = useState(null);
   const objectUrlsRef = useRef({ source: '', processed: '' });
+  // The 100 ms ticker is created once per Play, so anything it reads (rate,
+  // duration, the live player) has to come from refs — a plain closure would
+  // keep the values the page had when playback started.
+  const playbackRateRef = useRef(playbackRate);
+  const durationRef = useRef(duration);
+  const playerRef = useRef(null);
+  const anchorRef = useRef({ startAt: 0, startTimestamp: 0 });
+
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
 
   const releaseObjectUrl = (key) => {
     if (objectUrlsRef.current[key]) {
@@ -38,7 +52,10 @@ const VoiceChanger = () => {
 
   useEffect(() => {
     return () => {
-      if (player) player.dispose();
+      // The handlers dispose their own player before swapping it (the same
+      // instance would otherwise be disposed twice); dispose here only when
+      // this is still the live one — i.e. on unmount.
+      if (player && playerRef.current === player) player.dispose();
       clearInterval(intervalRef.current);
     };
   }, [player]);
@@ -49,13 +66,51 @@ const VoiceChanger = () => {
     }
   }, [playbackRate, player]);
 
+  /** Stops the position ticker (and forgets where playback started). */
+  const stopTicker = () => {
+    clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  };
+
+  /**
+   * Starts (or restarts) the ticker from `fromSeconds`. The anchor lives in a
+   * ref so seeking and speed changes can move it without restarting playback.
+   */
+  const startTicker = (fromSeconds) => {
+    stopTicker();
+    anchorRef.current = { startAt: fromSeconds, startTimestamp: Date.now() };
+    intervalRef.current = setInterval(() => {
+      const anchor = anchorRef.current;
+      const elapsed = (Date.now() - anchor.startTimestamp) / 1000;
+      const newTime = anchor.startAt + elapsed * playbackRateRef.current;
+      setCurrentTime(newTime);
+      if (durationRef.current > 0 && newTime >= durationRef.current) handleStop();
+    }, 100);
+  };
+
+  /**
+   * Records the position we are at RIGHT NOW as a new anchor — used before the
+   * playback rate changes, so the displayed timeline stays continuous instead
+   * of jumping (elapsed × newRate would otherwise rewrite the whole history).
+   */
+  const reanchor = () => {
+    const anchor = anchorRef.current;
+    const elapsed = (Date.now() - anchor.startTimestamp) / 1000;
+    anchorRef.current = {
+      startAt: anchor.startAt + elapsed * playbackRateRef.current,
+      startTimestamp: Date.now(),
+    };
+  };
+
   const handleFileChange = (e) => {
     setAudioFile(e.target.files[0]);
     setShowPlayer(false);
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    stopTicker();
     if (player) player.dispose();
+    playerRef.current = null;
     setPlayer(null);
     setProcessedAudioUrl(null);
     releaseObjectUrl('processed');
@@ -67,6 +122,7 @@ const VoiceChanger = () => {
     try {
       await Tone.start();
       if (player) player.dispose();
+      playerRef.current = null;
       releaseObjectUrl('source');
       const url = URL.createObjectURL(audioFile);
       objectUrlsRef.current.source = url;
@@ -96,8 +152,13 @@ const VoiceChanger = () => {
           break;
       }
 
+      playerRef.current = newPlayer;
       setPlayer(newPlayer);
       setShowPlayer(true);
+      // A fresh player means the previous transport is gone: drop the old
+      // ticker too, otherwise it keeps counting for a disposed source.
+      stopTicker();
+      setIsPlaying(false);
       setCurrentTime(0);
       // Log feature usage
       if (isLoggedInState) await logFeatureUsage('voice-changer');
@@ -113,14 +174,7 @@ const VoiceChanger = () => {
       await Tone.start();
       player.start(undefined, currentTime);
       setIsPlaying(true);
-      const startTimestamp = Date.now();
-      const startAt = currentTime;
-      intervalRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTimestamp) / 1000;
-        const newTime = startAt + elapsed * playbackRate;
-        setCurrentTime(newTime);
-        if (newTime >= duration) handleStop();
-      }, 100);
+      startTicker(currentTime);
     } catch (error) {
       console.error('Error playing audio:', error);
       alert('Error playing audio. Please try again.');
@@ -128,16 +182,19 @@ const VoiceChanger = () => {
   };
 
   const handleStop = () => {
-    if (player) {
-      player.stop();
-      setIsPlaying(false);
-      setCurrentTime(0);
-      clearInterval(intervalRef.current);
-    }
+    const active = playerRef.current;
+    if (active) active.stop();
+    stopTicker();
+    setIsPlaying(false);
+    setCurrentTime(0);
   };
 
   const handleSpeedChange = (e) => {
     const rate = parseFloat(e.target.value);
+    // Move the anchor to "now" while the OLD rate is still in the ref, then
+    // switch: the timeline keeps counting from the real current position.
+    reanchor();
+    playbackRateRef.current = rate;
     setPlaybackRate(rate);
     if (player) player.playbackRate = rate;
   };
@@ -148,6 +205,9 @@ const VoiceChanger = () => {
     if (player && isPlaying) {
       player.stop();
       player.start(undefined, time);
+      // Re-anchor, otherwise the very next tick would jump back to the
+      // position the ticker had when Play was pressed.
+      startTicker(time);
     }
   };
 
@@ -163,13 +223,20 @@ const VoiceChanger = () => {
     try {
       const arrayBuffer = await audioFile.arrayBuffer();
 
-      // Adjust total frames based on playback speed
-      const adjustedLength = Math.ceil((44100 * 40) / playbackRate);
-      const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
-        1, adjustedLength, 44100
-      );
+      // Decode against a throwaway context first: the rendered length has to
+      // follow the file's REAL duration. The previous version hard-coded 40
+      // seconds, so uploads longer than 40 s were silently truncated (and
+      // short ones were padded with seconds of silence).
+      const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const decodeCtx = new OfflineCtx(1, 1, 44100);
+      const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
 
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      // Speed shortens the result; 1.5 s of tail keeps the echo/reverb decay
+      // from being cut off at the end of the file.
+      const renderedSeconds = audioBuffer.duration / playbackRate + 1.5;
+      const renderedLength = Math.max(1, Math.ceil(renderedSeconds * 44100));
+      const audioCtx = new OfflineCtx(1, renderedLength, 44100);
+
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
 
@@ -258,18 +325,21 @@ const VoiceChanger = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* The gradient is a full literal on purpose: Tailwind only generates
+              the classes it can find as whole strings, so
+              `from-${option.from}` would produce a button with no start colour. */}
           {[
-            { value: 'normal', label: 'Normal', from: 'gray-600', to: 'gray-800' },
-            { value: 'pitchUp', label: 'Pitch Up', from: 'blue-500', to: 'indigo-600' },
-            { value: 'pitchDown', label: 'Pitch Down', from: 'yellow-400', to: 'yellow-600' },
-            { value: 'robot', label: 'Robot', from: 'red-500', to: 'pink-600' },
-            { value: 'echo', label: 'Echo', from: 'green-500', to: 'emerald-600' },
-            { value: 'reverb', label: 'Reverb', from: 'purple-500', to: 'violet-600' }
+            { value: 'normal', label: 'Normal', gradient: 'from-gray-600 to-gray-800' },
+            { value: 'pitchUp', label: 'Pitch Up', gradient: 'from-blue-500 to-indigo-600' },
+            { value: 'pitchDown', label: 'Pitch Down', gradient: 'from-yellow-400 to-yellow-600' },
+            { value: 'robot', label: 'Robot', gradient: 'from-red-500 to-pink-600' },
+            { value: 'echo', label: 'Echo', gradient: 'from-green-500 to-emerald-600' },
+            { value: 'reverb', label: 'Reverb', gradient: 'from-purple-500 to-violet-600' }
           ].map(option => (
             <button
               key={option.value}
               onClick={() => setEffect(option.value)}
-              className={`px-4 py-3 rounded-lg text-white bg-gradient-to-r from-${option.from} to-${option.to} ${effect === option.value ? 'ring-2 ring-white scale-105' : ''}`}
+              className={`px-4 py-3 rounded-lg text-white bg-gradient-to-r ${option.gradient} ${effect === option.value ? 'ring-2 ring-white scale-105' : ''}`}
             >
               {option.label}
             </button>

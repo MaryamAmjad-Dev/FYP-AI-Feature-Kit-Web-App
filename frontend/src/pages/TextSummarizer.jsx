@@ -30,9 +30,36 @@ export default function TextSummarizer() {
     setLoading(false);
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(summary);
-    alert('Summary copied to clipboard!');
+  const handleCopy = async () => {
+    if (!summary) return;
+    try {
+      // Only exists in secure contexts — plain-http LAN access throws here.
+      await navigator.clipboard.writeText(summary);
+      alert('Summary copied to clipboard!');
+      return;
+    } catch {
+      /* fall through to the legacy path */
+    }
+
+    const area = document.createElement('textarea');
+    area.value = summary;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      copied = false;
+    }
+    document.body.removeChild(area);
+    alert(
+      copied
+        ? 'Summary copied to clipboard!'
+        : 'Copying was blocked by the browser — select the summary and copy it manually.'
+    );
   };
 
   const handleDownload = () => {
