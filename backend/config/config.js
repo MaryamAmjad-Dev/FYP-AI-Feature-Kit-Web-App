@@ -138,7 +138,6 @@ const config = {
   apiKeys: {
     stability: process.env.STABILITY_API_KEY || '',
     removeBg: process.env.REMOVE_BG_API_KEY || '',
-    huggingface: process.env.HUGGINGFACE_API_KEY || '',
   },
 };
 

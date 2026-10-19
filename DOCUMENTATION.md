@@ -62,7 +62,7 @@ voice tone — every usage is tracked for analytics.
 |---|---|---|---|
 | **Text → Image** | `/text-to-image` | Stability AI (`stable-image/generate/core`) | Prompt in → PNG out |
 | **Remove Background** | `/background-removal` | remove.bg API | Image (base64) in → transparent PNG out |
-| **Text Summarizer** | `/text-summarizer` | Hugging Face `facebook/bart-large-cnn` | Long text → short summary |
+| **Text Summarizer** | `/text-summarizer` | Local extractive summarizer (no API) | Long text → short summary |
 | **Text → Speech** | `/text-to-speech` | Web Speech API (browser native) | No API key needed |
 | **Voice Changer** | `/voice-changer` | Tone.js | Records/loads audio, applies tone effects |
 
@@ -138,8 +138,7 @@ voice tone — every usage is tracked for analytics.
                                   │  Neon PostgreSQL │  │  AI Providers         │
                                   │  (us-east-2)     │  │  • Stability AI       │
                                   │  4 tables        │  │  • remove.bg          │
-                                  └──────────────────┘  │  • Hugging Face       │
-                                                        └──────────────────────┘
+                                  └──────────────────┘  └──────────────────────┘
 ```
 
 **Request flow (example — generate an image):**
@@ -189,7 +188,7 @@ FYP-AI-Feature-Kit-Web-App/
 │   ├── routes/
 │   │   ├── auth.routes.js        # signup, login, me, forgot/reset password
 │   │   ├── usage.routes.js       # feature-usage + contact
-│   │   └── ai.routes.js          # Stability / remove.bg / Hugging Face proxies
+│   │   └── ai.routes.js          # Stability / remove.bg proxies
 │   ├── tests/
 │   │   ├── validators.test.js    # unit: input validation
 │   │   ├── auth.test.js          # unit: JWT helpers
@@ -285,7 +284,7 @@ configured, password-reset codes are printed on the **backend console**.
 | `ADMIN_EMAILS` | optional | Comma-separated emails that may read all usage analytics |
 | `RESET_TOKEN_TTL_MINUTES` | optional | Reset-code validity, default `30` |
 | `SMTP_HOST/PORT/USER/PASS/FROM` | prod emails | Without SMTP, reset codes go to the server console (dev only) |
-| `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` / `HUGGINGFACE_API_KEY` | AI tools | Server-side only — never exposed to the browser |
+| `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` | AI tools | Server-side only — never exposed to the browser |
 
 ### `frontend/.env` (optional)
 

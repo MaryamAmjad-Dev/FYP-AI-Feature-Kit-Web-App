@@ -11,7 +11,6 @@ Build, create, and transform content with **Text-to-Image**, **Text-to-Speech**,
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4479A1?logo=postgresql&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
-![Hugging Face](https://img.shields.io/badge/Hugging%20Face-AI-FFD21E?logo=huggingface&logoColor=black)
 
 </div>
 
@@ -58,9 +57,9 @@ The project is designed with a modern React frontend, an Express.js backend, Pos
        ▼                     ▼
    PostgreSQL Database  AI APIs
                          │
-        ┌────────────────┼────────────────┐
-        ▼                ▼                ▼
-   Stability AI     Hugging Face     Remove.bg
+         ┌────────────────┴──────────────────┐
+         ▼                               ▼
+    Stability AI                      Remove.bg
 ```
 
 ---
@@ -86,7 +85,6 @@ The project is designed with a modern React frontend, an Express.js backend, Pos
 
 ## AI APIs
 
-- Hugging Face API
 - Stability AI API
 - Remove.bg API
 
@@ -107,7 +105,7 @@ FYP-AI-Feature-Kit-Web-App
 │   ├── routes/
 │   │   ├── auth.routes.js   # signup, login, me, forgot/reset password
 │   │   ├── usage.routes.js  # feature usage + contact
-│   │   └── ai.routes.js     # Stability / remove.bg / Hugging Face proxy
+│   │   └── ai.routes.js     # Stability / remove.bg proxy
 │   ├── tests/               # node:test suites
 │   ├── schema.sql
 │   ├── .env.example
@@ -208,7 +206,6 @@ SMTP_FROM="AI Feature Kit <no-reply@example.com>"
 # Third-party AI keys — server side ONLY
 STABILITY_API_KEY=YOUR_STABILITY_API_KEY
 REMOVE_BG_API_KEY=YOUR_REMOVE_BG_API_KEY
-HUGGINGFACE_API_KEY=YOUR_HUGGINGFACE_API_KEY
 ```
 
 ## `frontend/.env` (optional)
@@ -258,7 +255,7 @@ from this repository, with a **Neon** PostgreSQL database.
    | `SKIP_SCHEMA_INIT` | `true` (only if you ran schema.sql in step 1.3) |
    | `CORS_ORIGINS` | frontend URL from step 3 (e.g. `https://app.vercel.app`) |
    | `APP_URL` | frontend URL (used in password-reset emails) |
-   | `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` / `HUGGINGFACE_API_KEY` | optional AI features |
+   | `STABILITY_API_KEY` / `REMOVE_BG_API_KEY` | optional AI features |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | password-reset emails (without SMTP the code is only printed in the function logs — fine for a demo, not for real users) |
 
 5. The API is live at `https://<backend-project>.vercel.app/api/health`.
