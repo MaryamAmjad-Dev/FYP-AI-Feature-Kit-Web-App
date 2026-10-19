@@ -120,7 +120,7 @@ router.post('/remove-bg', async (req, res) => {
 
   try {
     const form = new FormData();
-    form.append('image_file_base64', imageBase64);
+    form.append('image_file_b64', imageBase64);
     form.append('size', 'auto');
     if (crop) {
       form.append('x', String(crop.x));
