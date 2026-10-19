@@ -57,4 +57,45 @@ async function sendPasswordResetEmail(toEmail, token) {
   }
 }
 
-module.exports = { sendPasswordResetEmail };
+/**
+ * Sends the signup verification link. Returns true when handed to SMTP,
+ * 'console' in development without SMTP (link printed to the server console),
+ * or false when delivery failed / SMTP is not configured in production.
+ */
+async function sendVerificationEmail(toEmail, token) {
+  const verifyUrl = `${config.appUrl}/verify-email?token=${encodeURIComponent(token)}`;
+
+  if (!config.smtp.enabled) {
+    if (config.isProduction) {
+      logger.error('SMTP is not configured — cannot deliver verification emails');
+      return false;
+    }
+    logger.warn('email verification link (dev, SMTP not configured)', { email: toEmail, verifyUrl });
+    return 'console';
+  }
+
+  try {
+    const transport = getTransporter();
+    await transport.sendMail({
+      from: config.smtp.from,
+      to: toEmail,
+      subject: 'Verify your AI Feature Kit email',
+      text:
+        `Welcome! Please verify your email address by opening this link:\n\n${verifyUrl}\n\n` +
+        `The link expires in a short while. If you did not sign up, you can ignore this email.`,
+      html: `
+        <p>Welcome to AI Feature Kit!</p>
+        <p>Verify your email address to activate your account:</p>
+        <p><a href="${verifyUrl}"><b>Verify my email</b></a></p>
+        <p>Or paste this URL into your browser:</p>
+        <p style="word-break:break-all">${verifyUrl}</p>
+        <p>The link expires in a short while. If you did not sign up, you can ignore this email.</p>`,
+    });
+    return true;
+  } catch (error) {
+    logger.error('failed to send verification email', { message: error.message });
+    return false;
+  }
+}
+
+module.exports = { sendPasswordResetEmail, sendVerificationEmail };

@@ -14,7 +14,7 @@ const {
   signToken,
 } = require('../middleware/auth');
 const { compareAgainstDummy, hashPassword, verifyPassword } = require('../lib/passwords');
-const { sendPasswordResetEmail } = require('../services/mailer');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/mailer');
 const {
   asString,
   isValidEmail,
@@ -65,6 +65,22 @@ function publicUser(row) {
   };
 }
 
+// Issues a fresh single-use email-verification token for an account and
+// stores only its hash (purpose = 'verify', so it can never be replayed as a
+// password-reset code). Any previous verification token is invalidated first.
+async function issueEmailVerification(userId) {
+  const token = generateResetToken();
+  const expiresAt = new Date(Date.now() + config.resetTokenTtlMs);
+  await db.query("DELETE FROM password_reset_tokens WHERE user_id = $1 AND purpose = 'verify'", [
+    userId,
+  ]);
+  await db.query(
+    "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, purpose) VALUES ($1, $2, $3, 'verify')",
+    [userId, hashResetToken(token), expiresAt]
+  );
+  return token;
+}
+
 // POST /api/signup
 router.post('/signup', credentialLimiter, async (req, res) => {
   const body = req.body || {};
@@ -80,15 +96,23 @@ router.post('/signup', credentialLimiter, async (req, res) => {
   try {
     const hashedPassword = await hashPassword(password);
     // The UNIQUE index is the real guard against duplicate accounts (race safe).
+    // New accounts start unverified — the emailed link flips this to true.
     const result = await db.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id',
+      'INSERT INTO users (name, email, password, email_verified) VALUES ($1, $2, $3, false) RETURNING id',
       [name, email, hashedPassword]
     );
+    const userId = result.rows[0].id;
+
+    const token = await issueEmailVerification(userId);
+    const delivered = await sendVerificationEmail(email, token);
+    if (delivered === false && config.isProduction) {
+      logger.error('verification email could not be delivered (SMTP not configured or send failed)');
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'User created successfully',
-      userId: result.rows[0].id,
+      message: 'User created successfully. Check your email for the verification link.',
+      userId,
     });
   } catch (error) {
     if (isDuplicateEntry(error)) {
@@ -98,6 +122,80 @@ router.post('/signup', credentialLimiter, async (req, res) => {
     }
     logger.error('signup failed', { code: error.code, message: error.message });
     return res.status(500).json({ success: false, message: 'Error creating user' });
+  }
+});
+
+// POST /api/verify-email — confirms the token from the emailed link.
+router.post('/verify-email', credentialLimiter, async (req, res) => {
+  const token = asString((req.body || {}).token).trim();
+  if (!isValidResetTokenFormat(token)) {
+    return res.status(400).json({ success: false, message: 'Invalid or expired verification link.' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      "SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token_hash = $1 AND purpose = 'verify' LIMIT 1",
+      [hashResetToken(token)]
+    );
+    const record = rows[0];
+    const expired = record && new Date(record.expires_at).getTime() <= Date.now();
+
+    if (!record || record.used_at || expired) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid or expired verification link.' });
+    }
+
+    // Atomic single-use claim (same pattern as reset-password).
+    const claim = await db.query(
+      "UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1 AND used_at IS NULL AND expires_at > NOW()",
+      [record.id]
+    );
+    if (claim.rowCount === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid or expired verification link.' });
+    }
+
+    await db.query('UPDATE users SET email_verified = true WHERE id = $1', [record.user_id]);
+    return res.json({ success: true, message: 'Email verified successfully. You can now log in.' });
+  } catch (error) {
+    logger.error('verify-email failed', { message: error.message });
+    return res.status(500).json({ success: false, message: 'Error verifying email.' });
+  }
+});
+
+// POST /api/resend-verification — re-sends the signup link. The reply is
+// identical whether or not the account exists (no user enumeration); the
+// server only sends when the account is real AND still unverified.
+router.post('/resend-verification', credentialLimiter, async (req, res) => {
+  const email = normalizeEmail((req.body || {}).email);
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      'SELECT id, email_verified FROM users WHERE email = $1 LIMIT 1',
+      [email]
+    );
+    const user = rows[0];
+
+    if (user && !user.email_verified) {
+      const token = await issueEmailVerification(user.id);
+      const delivered = await sendVerificationEmail(email, token);
+      if (delivered === false && config.isProduction) {
+        logger.error('verification email could not be delivered (SMTP not configured or send failed)');
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'If an account exists and is not verified yet, a verification email has been sent.',
+    });
+  } catch (error) {
+    logger.error('resend-verification failed', { message: error.message });
+    return res.status(500).json({ success: false, message: 'Error processing the request.' });
   }
 });
 
@@ -116,7 +214,7 @@ router.post('/login', credentialLimiter, async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, password, profile, token_version FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, name, email, password, profile, token_version, email_verified FROM users WHERE email = $1 LIMIT 1',
       [email]
     );
     const user = rows[0];
@@ -135,6 +233,15 @@ router.post('/login', credentialLimiter, async (req, res) => {
 
     if (!valid) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    // Only after the password checks out (never as an existence oracle):
+    // unverified accounts may not start a session until they click the link.
+    if (!user.email_verified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your email is not verified yet. Check your inbox for the verification link.',
+      });
     }
 
     setSessionCookie(res, signToken(user), { remember });
@@ -211,10 +318,13 @@ router.post('/forgot-password', credentialLimiter, async (req, res) => {
       const token = generateResetToken();
       const expiresAt = new Date(Date.now() + config.resetTokenTtlMs);
 
-      // Invalidate every previous code for this account (one live code max).
-      await db.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+      // Invalidate every previous reset code for this account (one live code
+      // max) — but never a pending signup-verification token.
+      await db.query("DELETE FROM password_reset_tokens WHERE user_id = $1 AND purpose = 'reset'", [
+        userId,
+      ]);
       await db.query(
-        'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, purpose) VALUES ($1, $2, $3, 'reset')",
         [userId, hashResetToken(token), expiresAt]
       );
 
@@ -256,7 +366,7 @@ router.post('/reset-password', credentialLimiter, async (req, res) => {
   try {
     const tokenHash = hashResetToken(token);
     const { rows } = await db.query(
-      'SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token_hash = $1 LIMIT 1',
+      "SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token_hash = $1 AND purpose = 'reset' LIMIT 1",
       [tokenHash]
     );
     const record = rows[0];

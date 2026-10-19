@@ -12,11 +12,16 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resendInfo, setResendInfo] = useState("");
+  const [resending, setResending] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setResendInfo("");
+    setShowResend(false);
     setLoading(true);
 
     try {
@@ -36,8 +41,27 @@ const Login = () => {
       }
     } catch (err) {
       setError(await extractErrorMessage(err));
+      // 403 = password correct but the email is still unverified.
+      if (err.response?.status === 403) setShowResend(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendInfo("");
+    setResending(true);
+    try {
+      const res = await apiClient.post("/resend-verification", { email });
+      setResendInfo(
+        res.data.message ||
+          "If that account exists and is not verified yet, a new verification email has been sent."
+      );
+      setShowResend(false);
+    } catch (err) {
+      setError(await extractErrorMessage(err));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -112,6 +136,20 @@ const Login = () => {
 
           {error && (
             <p className="text-red-400 text-center text-sm">{error}</p>
+          )}
+          {resendInfo && (
+            <p className="text-green-300 text-center text-sm">{resendInfo}</p>
+          )}
+
+          {showResend && (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="w-full text-sm text-pink-300 hover:underline disabled:opacity-60"
+            >
+              {resending ? "Sending…" : "Resend verification email"}
+            </button>
           )}
 
           <button

@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(255) NOT NULL,
   profile JSONB NOT NULL DEFAULT '{}'::jsonb,
   token_version INTEGER NOT NULL DEFAULT 0,
+  -- DEFAULT true backfills every pre-existing account as verified so old
+  -- users keep logging in (the signup INSERT always stores an explicit false)
+  email_verified BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -30,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- databases (CREATE TABLE IF NOT EXISTS alone would not add them).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT true;
 
 -- Social login (Google / GitHub): which provider owns the account and the id
 -- that provider issued. 'local' = email + password, which is what every row
@@ -58,15 +62,20 @@ CREATE TABLE IF NOT EXISTS user_feature_usage (
   used_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- One-time password reset codes (only the SHA-256 hash is stored)
+-- One-time tokens (only the SHA-256 hash is stored). `purpose` separates
+-- signup-verification links from password-reset codes so one can never be
+-- consumed as the other.
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash CHAR(64) NOT NULL UNIQUE,
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ,
+  purpose VARCHAR(20) NOT NULL DEFAULT 'reset',
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS purpose VARCHAR(20) NOT NULL DEFAULT 'reset';
 
 -- Lookups: per-user history pages, the admin analytics query and the
 -- password-reset code lookup/claim all run through these.

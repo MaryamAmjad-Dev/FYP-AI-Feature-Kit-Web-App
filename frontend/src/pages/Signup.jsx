@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import apiClient from "../lib/apiClient";
 import { extractErrorMessage } from "../lib/api";
@@ -15,12 +15,16 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const navigate = useNavigate();
+  const [showResend, setShowResend] = useState(false);
+  const [resendInfo, setResendInfo] = useState("");
+  const [resending, setResending] = useState(false);
 
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setResendInfo("");
+    setShowResend(false);
 
     if (!username || !email || !password || !confirmPassword || !accepted) {
       setError("Please fill all fields and accept terms!");
@@ -46,20 +50,41 @@ const Signup = () => {
       });
 
       if (res.data.success) {
-        setSuccess("Account created successfully!");
+        setSuccess(
+          `Verification email sent to ${email}. Click the link inside to activate your account, then log in.`
+        );
         setUsername("");
         setEmail("");
         setPassword("");
         setConfirmPassword("");
         setAccepted(false);
-        setTimeout(() => navigate("/login"), 2000);
       } else {
         setError(res.data.message || "Registration failed");
       }
     } catch (err) {
       setError(await extractErrorMessage(err));
+      // The email is already registered — offer to resend the verification
+      // link (the server only sends it when the account is still unverified).
+      if (err.response?.status === 409) setShowResend(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendInfo("");
+    setResending(true);
+    try {
+      const res = await apiClient.post("/resend-verification", { email });
+      setResendInfo(
+        res.data.message ||
+          "If that account exists and is not verified yet, a new verification email has been sent."
+      );
+      setShowResend(false);
+    } catch (err) {
+      setError(await extractErrorMessage(err));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -171,6 +196,18 @@ const Signup = () => {
 
           {error && <p className="text-red-400 text-center">{error}</p>}
           {success && <p className="text-green-400 text-center">{success}</p>}
+
+          {showResend && !success && (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="w-full text-sm text-pink-300 hover:underline disabled:opacity-60"
+            >
+              {resending ? "Sending…" : "Resend verification email"}
+            </button>
+          )}
+          {resendInfo && <p className="text-green-300 text-center text-sm">{resendInfo}</p>}
 
           <button
             type="submit"

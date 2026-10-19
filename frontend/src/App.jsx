@@ -19,6 +19,7 @@ const Signup = lazy(() => import('./pages/Signup'));
 const Terms = lazy(() => import('./pages/Terms'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Profile = lazy(() => import('./pages/Profile'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const About = lazy(() => import('./pages/About'));
@@ -49,6 +50,7 @@ const AppContent = () => {
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ForgotPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route
               path="/profile"
               element={
