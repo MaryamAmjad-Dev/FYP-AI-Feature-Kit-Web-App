@@ -3,7 +3,23 @@ import { motion } from 'framer-motion';
 import { FaImage, FaDownload, FaUpload } from 'react-icons/fa';
 import Spinner from '../components/ui/Spinner';
 import useSession from '../hooks/useSession';
-import { extractErrorMessage, fileToBase64, logFeatureUsage, removeBackground } from '../lib/api';
+import { extractErrorMessage, logFeatureUsage } from '../lib/api';
+
+/**
+ * Background removal runs entirely in the browser via @imgly/background-removal
+ * (ONNX model, downloaded once and cached by the browser). No API key, no
+ * server round-trip, no size cap — the package is imported lazily so it never
+ * loads on pages that do not use it.
+ */
+async function removeBackgroundInBrowser(image, onProgress) {
+  const { removeBackground } = await import('@imgly/background-removal');
+  return removeBackground(image, {
+    // fp16: same model at half the size — noticeably faster first download.
+    model: 'isnet_fp16',
+    output: { format: 'image/png', quality: 0.9 },
+    progress: (key, current, total) => onProgress(key, current, total),
+  });
+}
 
 export default function RemoveBg() {
   const isLoggedInState = useSession();
@@ -16,6 +32,7 @@ export default function RemoveBg() {
   const [selection, setSelection] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
+  const [progress, setProgress] = useState(null);
   const imageRef = useRef(null);
   const objectUrlsRef = useRef({ preview: '', output: '' });
 
@@ -99,9 +116,36 @@ export default function RemoveBg() {
     return { x, y, width, height };
   };
 
+  /**
+   * Crops the original image to the selected region and returns a Blob.
+   * The in-browser removal library takes the whole image, so the crop is
+   * applied first (canvas), then the cropped bitmap is processed.
+   * Returns the untouched file when nothing is selected.
+   */
+  const cropToBlob = async () => {
+    const crop = getSelectionInImagePixels();
+    const img = imageRef.current;
+    if (!crop || !img || !img.naturalWidth) return file;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+
+    const blob = await new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Could not crop the selected area.'))),
+        'image/png'
+      )
+    );
+    return blob;
+  };
+
   const handleUpload = async () => {
     if (!file) return alert('Please select an image first.');
     setLoading(true);
+    setProgress({ label: 'Preparing image…', percent: 0 });
 
     if (objectUrlsRef.current.output) {
       URL.revokeObjectURL(objectUrlsRef.current.output);
@@ -110,9 +154,17 @@ export default function RemoveBg() {
     setOutputUrl('');
 
     try {
-      const imageBase64 = await fileToBase64(file);
-      const crop = getSelectionInImagePixels();
-      const blob = await removeBackground({ imageBase64, crop });
+      const source = await cropToBlob();
+      const blob = await removeBackgroundInBrowser(source, (key, current, total) => {
+        const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+        // Friendly label: raw keys are internal ("fetch:tf_model", "compute:inference").
+        const label = key.startsWith('fetch')
+          ? percent < 100
+            ? 'Downloading AI model (first use only)…'
+            : 'Model ready'
+          : 'Removing background…';
+        setProgress({ label, percent });
+      });
 
       const url = URL.createObjectURL(blob);
       objectUrlsRef.current.output = url;
@@ -124,6 +176,7 @@ export default function RemoveBg() {
       alert(message || 'Background removal failed. Please try again.');
     }
 
+    setProgress(null);
     setLoading(false);
   };
 
@@ -217,6 +270,19 @@ export default function RemoveBg() {
               </>
             )}
           </button>
+          {loading && progress && (
+            <div className="mt-4 w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+              <div
+                className="h-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-300"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
+          )}
+          {loading && progress && (
+            <p className="mt-2 text-xs text-gray-300">
+              {progress.label} ({progress.percent}%)
+            </p>
+          )}
         </div>
 
         {outputUrl && (

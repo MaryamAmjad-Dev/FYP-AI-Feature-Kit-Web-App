@@ -5,6 +5,7 @@ const { config } = require('../config/config');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../lib/logger');
 const { LIMITS, asString } = require('../lib/validators');
+const { summarize } = require('../lib/summarizer');
 
 const router = express.Router();
 
@@ -64,27 +65,6 @@ function requireKey(res, key, name) {
     message: 'This feature is temporarily unavailable. Please try again later.',
   });
   return false;
-}
-
-/**
- * The upstream model may answer with [{ summary_text }], an object, or an
- * error payload. Only a well-formed summary is forwarded — the raw provider
- * response never reaches the client.
- */
-function normalizeSummary(data) {
-  let list = null;
-  if (Array.isArray(data)) {
-    list = data;
-  } else if (data && typeof data.summary_text === 'string') {
-    list = [{ summary_text: data.summary_text }];
-  } else if (data && Array.isArray(data.summary_text)) {
-    list = data.summary_text.map((text) => (typeof text === 'string' ? { summary_text: text } : text));
-  }
-  if (!list) return null;
-  const items = list
-    .filter((item) => item && typeof item.summary_text === 'string' && item.summary_text.trim())
-    .map((item) => ({ summary_text: item.summary_text.trim() }));
-  return items.length ? items : null;
 }
 
 // POST /api/ai/text-to-image  { prompt }
@@ -170,6 +150,10 @@ router.post('/remove-bg', async (req, res) => {
 });
 
 // POST /api/ai/summarize  { text }
+//
+// Runs a local extractive summarizer (backend/lib/summarizer.js) — no
+// third-party API, key or network hop. The response shape is unchanged:
+// [{ summary_text }].
 router.post('/summarize', async (req, res) => {
   const text = asString((req.body || {}).text).trim();
   if (!text || text.length > LIMITS.text) {
@@ -178,35 +162,15 @@ router.post('/summarize', async (req, res) => {
       .json({ success: false, message: `Text must be 1-${LIMITS.text} characters.` });
   }
 
-  if (!requireKey(res, config.apiKeys.huggingface, 'HUGGINGFACE_API_KEY')) return;
-
   try {
-    const upstream = await fetch(
-      'https://api-inference.huggingface.co/models/facebook/bart-large-cnn',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.apiKeys.huggingface}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ inputs: text }),
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      }
-    );
-
-    if (!upstream.ok) {
-      return failUpstream(res, upstream, 'Summarization failed. Please try again.');
-    }
-
-    const data = await upstream.json();
-    const summary = normalizeSummary(data);
+    const summary = summarize(text);
     if (!summary) {
-      logger.error('unexpected summarizer response shape', { keys: Object.keys(data || {}) });
+      logger.error('summarizer produced an empty result');
       return res
         .status(502)
         .json({ success: false, message: 'Summarization failed. Please try again.' });
     }
-    return res.json(summary);
+    return res.json([{ summary_text: summary }]);
   } catch (error) {
     logger.error('summarize failed', { message: error.message });
     return res.status(502).json({ success: false, message: 'Summarization failed.' });
