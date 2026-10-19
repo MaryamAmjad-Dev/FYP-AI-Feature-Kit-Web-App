@@ -8,7 +8,6 @@ const { initSchema, closePool } = require('./db/db');
 const { createSharedStore } = require('./middleware/rateLimitStore');
 const logger = require('./lib/logger');
 const authRoutes = require('./routes/auth.routes');
-const oauthRoutes = require('./routes/oauth.routes');
 const usageRoutes = require('./routes/usage.routes');
 const aiRoutes = require('./routes/ai.routes');
 
@@ -90,9 +89,6 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api', authRoutes);
-// Social login: /api/auth/{google,github}[/callback] — mounted under /api/auth
-// so it never collides with the /api/me, /api/login routes above.
-app.use('/api/auth', oauthRoutes);
 app.use('/api', usageRoutes);
 app.use('/api/ai', aiRoutes);
 

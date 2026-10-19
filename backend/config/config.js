@@ -122,23 +122,6 @@ const config = {
 
   appUrl: process.env.APP_URL || 'http://localhost:5173',
 
-  // Social login (OAuth 2.0 authorization-code flow, Google + GitHub).
-  // Credentials live in backend/.env: an empty pair simply means the provider
-  // is not offered — GET /api/auth/providers reports that so the UI can grey
-  // the button out instead of failing halfway through a redirect.
-  oauth: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    },
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID || '',
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
-    },
-    // Anti-CSRF window for the `state` cookie handed out before redirecting.
-    stateTtlMs: (Number(process.env.OAUTH_STATE_TTL_MINUTES) || 10) * 60 * 1000,
-  },
-
   // Rate limits (all overridable per environment / plan)
   rateLimits: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
@@ -166,17 +149,6 @@ const config = {
 };
 
 config.smtp.enabled = Boolean(config.smtp.host);
-
-config.oauth.enabled = {
-  google: Boolean(config.oauth.google.clientId && config.oauth.google.clientSecret),
-  github: Boolean(config.oauth.github.clientId && config.oauth.github.clientSecret),
-};
-
-// Where Google/GitHub send the browser back. It must be the API URL including
-// /api (in dev that is the Vite proxy, in production the origin that rewrites
-// /api to the backend) and it has to be registered as an authorised redirect
-// URI in the provider's console — an exact, per-environment match.
-config.oauth.callbackBase = (process.env.OAUTH_CALLBACK_BASE || `${config.appUrl}/api`).replace(/\/+$/, '');
 
 // Exact match, or wildcard match where "*" stands for any part of the host.
 // "https://*.example.com" matches "https://a.example.com" (but not

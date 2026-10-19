@@ -16,7 +16,6 @@ const VoiceChanger = lazy(() => import('./pages/VoiceChanger'));
 const TexttoSpeech = lazy(() => import('./pages/TexttoSpeech'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
-const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const Terms = lazy(() => import('./pages/Terms'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -46,8 +45,6 @@ const AppContent = () => {
             <Route path="/text-to-speech" element={<ProtectedRoute><TexttoSpeech /></ProtectedRoute>} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            {/* Where Google/GitHub send the browser back after signing in. */}
-            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
