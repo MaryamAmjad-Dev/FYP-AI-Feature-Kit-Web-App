@@ -57,10 +57,11 @@ async function failUpstream(res, upstream, fallbackMessage) {
 
 function requireKey(res, key, name) {
   if (key) return true;
+  // The env-var name is logged server-side only — never sent to the client.
   logger.error('AI key not configured', { provider: name });
   res.status(503).json({
     success: false,
-    message: `${name} is not configured on the server. Add it to backend/.env.`,
+    message: 'This feature is temporarily unavailable. Please try again later.',
   });
   return false;
 }

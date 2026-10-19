@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import apiClient from "../lib/apiClient";
+import { extractErrorMessage } from "../lib/api";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -56,7 +57,7 @@ const Signup = () => {
         setError(res.data.message || "Registration failed");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      setError(await extractErrorMessage(err));
     } finally {
       setLoading(false);
     }

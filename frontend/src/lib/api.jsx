@@ -8,19 +8,25 @@ import apiClient from './apiClient';
  * request with the real key — nothing secret is bundled into the JS.
  */
 
-/** Reads a useful message out of an Axios error (JSON or Blob payloads). */
+/** Reads a useful, safe message out of an Axios error (JSON or Blob payloads). */
 export async function extractErrorMessage(error) {
   const data = error?.response?.data;
   if (data instanceof Blob) {
     try {
       const text = await data.text();
       const json = JSON.parse(text);
-      return json.message || text;
+      // Only a well-formed message field is trusted — never the raw body,
+      // which could be an HTML error page from a proxy or framework.
+      if (typeof json.message === 'string' && json.message.trim()) return json.message;
     } catch {
-      return 'Request failed. Please try again.';
+      /* fall through to the generic string */
     }
+    return 'Request failed. Please try again.';
   }
-  return data?.message || error?.message || 'Request failed. Please try again.';
+  // The interceptor already overwrote 5xx messages with a safe generic string,
+  // so data.message here is either a server-provided safe message or the
+  // sanitized one. Never surface axios's raw internal error text.
+  return data?.message || 'Request failed. Please try again.';
 }
 
 /** Converts a File into raw base64 (no data: prefix) for the AI proxy. */
@@ -62,7 +68,8 @@ export async function summarizeText(text) {
 export async function logFeatureUsage(feature) {
   try {
     await apiClient.post('/feature-usage', { feature });
-  } catch (err) {
-    console.error('Failed to log feature usage', err);
+  } catch {
+    // Usage logging is best-effort — never block the feature or dump the
+    // full error object (which can include response bodies) to the console.
   }
 }

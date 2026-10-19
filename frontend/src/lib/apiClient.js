@@ -39,6 +39,18 @@ apiClient.interceptors.response.use(
     }
 
     const status = error.response?.status;
+
+    // Never let a 5xx message reach the UI verbatim — the server should send
+    // generic text, but a proxy, framework or misconfigured provider can leak
+    // internals (env names, file paths, stack traces). Overwrite the message
+    // so every page that reads `data.message` shows the same safe string.
+    if (status >= 500) {
+      error.response.data = {
+        ...(error.response.data instanceof Blob ? {} : error.response.data),
+        message: 'Something went wrong on our end. Please try again in a moment.',
+      };
+    }
+
     const url = error.config?.url || '';
     const isAuthAttempt = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 

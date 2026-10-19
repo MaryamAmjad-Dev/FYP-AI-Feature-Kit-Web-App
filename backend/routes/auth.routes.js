@@ -219,13 +219,9 @@ router.post('/forgot-password', credentialLimiter, async (req, res) => {
       const delivered = await sendPasswordResetEmail(email, token);
       if (delivered === 'console') {
         // Development only: SMTP is not configured, the code is on the server console.
-        return res.json({
-          success: true,
-          message: 'If an account exists for that email, a reset code has been issued.',
-          delivery: 'console',
-        });
-      }
-      if (delivered === false && config.isProduction) {
+        // The delivery channel is never disclosed to the client.
+        logger.info('password reset code printed to server console (SMTP not configured)', { email });
+      } else if (delivered === false && config.isProduction) {
         logger.error('password reset email could not be delivered (SMTP not configured)');
       }
     }

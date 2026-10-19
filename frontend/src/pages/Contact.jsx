@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import apiClient from '../lib/apiClient';
+import { extractErrorMessage } from '../lib/api';
 
 const Contact = () => {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
@@ -25,8 +26,7 @@ const Contact = () => {
         toast.error(res.data.message || 'Failed to send message');
       }
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.message || 'Something went wrong. Try again!');
+      toast.error(await extractErrorMessage(error));
     }
     setLoading(false);
   };

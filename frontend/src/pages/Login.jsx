@@ -3,6 +3,7 @@ import { FaGoogle, FaGithub, FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react
 import { useNavigate, Link } from "react-router-dom";
 import apiClient from "../lib/apiClient";
 import { setSession } from "../lib/auth";
+import { extractErrorMessage } from "../lib/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -34,11 +35,7 @@ const Login = () => {
         setError(res.data.message || "Login failed!");
       }
     } catch (err) {
-      if (err.code === "ERR_NETWORK") {
-        setError("Cannot connect to server. Please try again later.");
-      } else {
-        setError(err.response?.data?.message || "Invalid email or password");
-      }
+      setError(await extractErrorMessage(err));
     } finally {
       setLoading(false);
     }

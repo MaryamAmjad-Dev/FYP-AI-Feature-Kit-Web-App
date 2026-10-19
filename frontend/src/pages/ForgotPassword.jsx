@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../lib/apiClient';
+import { extractErrorMessage } from '../lib/api';
 
 /**
  * Two-step password reset:
@@ -49,14 +50,12 @@ const ForgotPassword = () => {
     try {
       const res = await apiClient.post('/forgot-password', { email });
       setInfo(
-        res.data.delivery === 'console'
-          ? 'No SMTP configured — the reset code was printed on the backend server console.'
-          : res.data.message ||
-            'If an account exists for that email, a password reset code has been sent.'
+        res.data.message ||
+          'If an account exists for that email, a password reset code has been sent.'
       );
       setStep('reset');
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      setError(await extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -96,7 +95,7 @@ const ForgotPassword = () => {
         setError(res.data.message || 'Failed to reset password');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong!');
+      setError(await extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
