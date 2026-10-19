@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Live frontend** | https://fyp-ai-feature-kit-web.vercel.app |
+| **Live frontend** | https://fyp-ai-feature-kit-web-app.vercel.app |
 | **Live API** | https://fyp-ai-feature-kit-api.vercel.app |
 | **Repository** | https://github.com/MaryamAmjad-Dev/FYP-AI-Feature-Kit-Web-App |
 | **Database** | Neon PostgreSQL (pooled endpoint, AWS) |
@@ -649,7 +649,7 @@ The app runs as **two Vercel projects** built from this one repository.
 
 ### 13.4 Current production values
 
-- `CORS_ORIGINS` = `https://fyp-ai-feature-kit-web.vercel.app,https://*-maryamamjad-projects.vercel.app,http://localhost:5173,http://localhost:4173`
+- `CORS_ORIGINS` = `https://fyp-ai-feature-kit-web-app.vercel.app,https://*-maryamamjad-projects.vercel.app,http://localhost:5173,http://localhost:4173`
   (the wildcard covers every Vercel deployment preview of this team).
 - The API is region-agnostic; Vercel routes it to the nearest function region
   and Neon serves from `us-east-2`.
