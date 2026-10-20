@@ -5,6 +5,7 @@ const { db } = require('../db/db');
 const { config } = require('../config/config');
 const { isAdmin, requireAdmin, requireAuth } = require('../middleware/auth');
 const logger = require('../lib/logger');
+const { sendContactNotificationEmail } = require('../services/mailer');
 const {
   asString,
   isKnownFeature,
@@ -131,6 +132,11 @@ router.post('/contact', contactLimiter, async (req, res) => {
       email,
       message,
     ]);
+    // Fire-and-forget: the message is already saved; a slow/failed SMTP
+    // round-trip must not delay or fail the user's request.
+    sendContactNotificationEmail({ name, email, message }).catch((mailError) =>
+      logger.error('contact notification error', { message: mailError.message })
+    );
     return res.json({ success: true, message: 'Feedback sent and saved!' });
   } catch (error) {
     logger.error('contact insert failed', { message: error.message });

@@ -98,4 +98,43 @@ async function sendVerificationEmail(toEmail, token) {
   }
 }
 
-module.exports = { sendPasswordResetEmail, sendVerificationEmail };
+/**
+ * Notifies the admin mailbox about a new contact-form submission. Recipients
+ * are ADMIN_EMAILS, falling back to the SMTP account itself. Delivery failure
+ * never fails the request — the message is already stored in the database.
+ */
+async function sendContactNotificationEmail({ name, email, message }) {
+  const recipients = config.adminEmails.length
+    ? config.adminEmails
+    : config.smtp.user
+      ? [config.smtp.user]
+      : [];
+
+  if (!config.smtp.enabled || recipients.length === 0) {
+    logger.warn('contact message stored but SMTP/admin recipients not configured', {
+      from: email,
+    });
+    return false;
+  }
+
+  try {
+    const transport = getTransporter();
+    await transport.sendMail({
+      from: config.smtp.from,
+      to: recipients.join(','),
+      subject: `New contact message from ${name}`,
+      text: `You have a new contact message from the website.\n\nFrom: ${name} <${email}>\n\n${message}`,
+      html: `
+        <p>You have a new contact message from the website.</p>
+        <p><b>From:</b> ${name} &lt;${email}&gt;</p>
+        <p><b>Message:</b></p>
+        <p style="white-space:pre-wrap">${message}</p>`,
+    });
+    return true;
+  } catch (error) {
+    logger.error('failed to send contact notification email', { message: error.message });
+    return false;
+  }
+}
+
+module.exports = { sendPasswordResetEmail, sendVerificationEmail, sendContactNotificationEmail };

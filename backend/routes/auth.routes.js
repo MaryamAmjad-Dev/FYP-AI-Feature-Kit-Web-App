@@ -96,23 +96,16 @@ router.post('/signup', credentialLimiter, async (req, res) => {
   try {
     const hashedPassword = await hashPassword(password);
     // The UNIQUE index is the real guard against duplicate accounts (race safe).
-    // New accounts start unverified — the emailed link flips this to true.
+    // No email-verification step: accounts are active immediately.
     const result = await db.query(
-      'INSERT INTO users (name, email, password, email_verified) VALUES ($1, $2, $3, false) RETURNING id',
+      'INSERT INTO users (name, email, password, email_verified) VALUES ($1, $2, $3, true) RETURNING id',
       [name, email, hashedPassword]
     );
-    const userId = result.rows[0].id;
-
-    const token = await issueEmailVerification(userId);
-    const delivered = await sendVerificationEmail(email, token);
-    if (delivered === false && config.isProduction) {
-      logger.error('verification email could not be delivered (SMTP not configured or send failed)');
-    }
 
     return res.status(201).json({
       success: true,
-      message: 'User created successfully. Check your email for the verification link.',
-      userId,
+      message: 'User created successfully.',
+      userId: result.rows[0].id,
     });
   } catch (error) {
     if (isDuplicateEntry(error)) {
